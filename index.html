@@ -1,0 +1,2218 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>אימפריית הנמלים - סימולטור מושבה</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Heebo', sans-serif;
+            background-color: #3d2d1b; /* צבע רקע אדמתי */
+        }
+        canvas { display: block; }
+        .ui-overlay {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%;
+            pointer-events: none; /* מאפשר לחיצות לעבור דרך הממשק אל הקנבס */
+        }
+        .ui-element { pointer-events: auto; } /* מאפשר אינטראקציה עם כפתורים ספציפיים */
+        #info-container {
+            padding: 0.75rem; color: white;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.6), rgba(0,0,0,0));
+        }
+        .action-button {
+            background-color: rgba(94, 73, 52, 0.8); color: #f0e6d6;
+            border: 2px solid #c8a87a; padding: 0.5rem; border-radius: 8px;
+            cursor: pointer; transition: all 0.2s ease; font-weight: 500;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            width: 44px;
+            height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .action-button svg {
+            width: 24px;
+            height: 24px;
+            fill: currentColor;
+        }
+        .action-button:hover:not(:disabled) {
+            background-color: rgba(120, 95, 70, 0.9); border-color: #f0e6d6;
+        }
+        .action-button:disabled {
+            background-color: rgba(50, 50, 50, 0.7); border-color: #777; cursor: not-allowed;
+        }
+        .queue-badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background-color: #e53e3e;
+            color: white;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+        .resource-box {
+            background-color: rgba(0,0,0,0.4); padding: 0.5rem 1rem; border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.2); font-size: 1rem;
+        }
+        #loading-screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: #000; z-index: 100;
+            display: flex; justify-content: center; align-items: center;
+            color: #f0e6d6;
+            transition: opacity 0.5s ease-out;
+        }
+        #intro-video {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 50vw;
+            height: auto;
+            max-height: 80vh;
+            object-fit: contain;
+            transform: translate(-50%, -50%);
+            z-index: 99;
+        }
+        #ant-camera-container {
+            position: absolute;
+            top: 150px;
+            left: 20px;
+            width: 320px;
+            height: 280px;
+            background-color: rgba(0,0,0,0.7);
+            border: 2px solid #c8a87a;
+            border-radius: 8px;
+            z-index: 50;
+            display: none;
+            pointer-events: auto;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+            resize: both;
+            overflow: hidden;
+            flex-direction: column;
+        }
+        #ant-camera-header {
+            padding: 5px;
+            cursor: move;
+            background-color: #5e4934;
+            color: #f0e6d6;
+            text-align: center;
+            font-weight: bold;
+            border-bottom: 2px solid #c8a87a;
+        }
+        #close-ant-camera-btn {
+            position: absolute;
+            top: 3px;
+            right: 5px; /* מותאם ל-RTL */
+            cursor: pointer;
+            font-size: 1.2rem;
+            line-height: 1;
+        }
+        #ant-camera-view {
+            position: relative;
+            width: 100%;
+            height: calc(100% - 32px); /* גובה החלון פחות גובה הכותרת */
+        }
+         #ant-thought-box {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background-color: rgba(0,0,0,0.6);
+            color: #f0e6d6;
+            padding: 8px;
+            font-size: 0.8rem;
+            text-align: right;
+            box-sizing: border-box;
+            border-top: 1px solid #c8a87a;
+        }
+        #help-modal {
+            display: none;
+            position: fixed;
+            z-index: 101;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.6);
+            pointer-events: auto;
+            direction: rtl;
+        }
+        .help-modal-content {
+            background-color: #2a1f14;
+            color: #f0e6d6;
+            margin: 10% auto;
+            padding: 25px;
+            border: 2px solid #c8a87a;
+            width: 80%;
+            max-width: 600px;
+            border-radius: 10px;
+            position: relative;
+        }
+        .close-help-btn {
+            color: #aaa;
+            position: absolute;
+            left: 15px; /* מותאם ל-RTL */
+            top: 5px;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .help-modal-content h2, .help-modal-content h3 {
+            font-size: 1.5rem;
+            color: #f0e6d6;
+            border-bottom: 1px solid #c8a87a;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+        }
+        .help-modal-content p, .help-modal-content li {
+            font-size: 1rem;
+            line-height: 1.6;
+        }
+
+        /* --- GUI for Time/Season Cycle --- */
+        #time-season-gui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            width: 120px;
+            height: 120px;
+            pointer-events: auto;
+            z-index: 50;
+        }
+        .gui-circle {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            box-sizing: border-box;
+        }
+        #season-ring {
+            background-image: conic-gradient(
+                #fff4d1 0deg 90deg,     /* Spring */
+                #ffecd1 90deg 180deg,    /* Summer */
+                #ffd1a1 180deg 270deg,   /* Autumn */
+                #ccddee 270deg 360deg    /* Winter */
+            );
+            transition: transform 1s linear;
+        }
+        #day-night-cycle {
+            background-color: rgba(0, 0, 0, 0.5);
+            border: 4px solid #c8a87a;
+            width: 80%;
+            height: 80%;
+            top: 10%;
+            left: 10%;
+        }
+        #sky-icons {
+            width: 100%;
+            height: 100%;
+            transition: transform 1s linear;
+        }
+        .sky-icon {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            left: 50%;
+            top: 50%;
+            margin-left: -10px;
+            margin-top: -10px;
+            font-size: 16px;
+            text-align: center;
+        }
+        #sun-icon {
+            transform: translateY(-38px);
+            color: #ffddaa;
+        }
+        #moon-icon {
+            transform: translateY(38px);
+            color: #cccccc;
+        }
+        #season-indicator {
+            position: absolute;
+            top: -5px;
+            left: 50%;
+            margin-left: -10px;
+            width: 20px;
+            height: 20px;
+            background-color: rgba(255, 255, 255, 0.9);
+            border: 2px solid #5e4934;
+            border-radius: 50%;
+            box-shadow: 0 0 5px white;
+        }
+
+    </style>
+</head>
+<body>
+    <div id="loading-screen">
+         <video id="intro-video" autoplay muted loop playsinline>
+            <source src="https://raw.githubusercontent.com/orengamchi/ant_city/main/grok-video-03d6b35d-897f-4212-b206-b9a8fed2d057.mp4" type="video/mp4">
+        </video>
+        <div id="loading-text" class="text-amber-100" style="z-index: 101; position: relative; background: rgba(0,0,0,0.5); padding: 5px 10px; border-radius: 5px;">טוען...</div>
+    </div>
+
+    <!-- GUI for Time/Season -->
+    <div id="time-season-gui" class="ui-element">
+        <div id="season-ring" class="gui-circle">
+            <div id="season-indicator"></div>
+        </div>
+        <div id="day-night-cycle" class="gui-circle">
+            <div id="sky-icons">
+                <div id="sun-icon" class="sky-icon">☀️</div>
+                <div id="moon-icon" class="sky-icon">🌙</div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- חלון עזרה מודאלי -->
+    <div id="help-modal">
+        <div class="help-modal-content">
+            <span class="close-help-btn">&times;</span>
+            <h2>מדריך למשחק</h2>
+            <p><strong>מטרת המשחק:</strong> לנהל מושבת נמלים, להרחיב את הקן, לאסוף משאבים ולשרוד את מחזור עונות השנה.</p>
+            
+            <h3>הישרדות</h3>
+            <ul>
+                <li><strong>קצב ילודה:</strong> המלכה מטילה ביצה חדשה כל דקה, בתנאי שיש לה מזון ומים.</li>
+                <li><strong>תמותה:</strong> נמלה פועלת מתה באופן טבעי כל 5 עונות.</li>
+                <li><strong>עונות השנה:</strong> כל עונה נמשכת דקה. החורף מביא גשמים והופך את איסוף המזון למאתגר יותר.</li>
+            </ul>
+
+            <h3>תפעול הממשק</h3>
+            <ul>
+                <li><strong>הרחב קן:</strong> שולח נמלה לחפור חדר או מסדרון חדש.</li>
+                <li><strong>חפור מחסן:</strong> שולח נמלה לחפור חדר ייעודי (מזון, מים, ילדות, חומרים).</li>
+                <li><strong>קרני X:</strong> מאפשר תצוגת סייבר-ניאון של הקן והנמלים.</li>
+            </ul>
+
+            <h3>אינטראקציות</h3>
+            <ul>
+                <li><strong>מבט נמלה:</strong> לחיצה כפולה על נמלה תפתח חלונית עם נקודת המבט שלה. הנמלה המצולמת תהבהב.</li>
+                <li><strong>גיל השורש:</strong> לחיצה כפולה על שורש תציג את גילו בעונות.</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- חלון צף של מצלמת הנמלה -->
+    <div id="ant-camera-container">
+        <div id="ant-camera-header">
+            מבט נמלה
+            <span id="close-ant-camera-btn">&times;</span>
+        </div>
+        <div id="ant-camera-view">
+             <div id="ant-thought-box"></div>
+        </div>
+    </div>
+
+    <!-- ממשק משתמש ראשי -->
+    <div id="info-container" class="ui-overlay">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center">
+                <!-- צד ימין של הממשק (כפתורי פעולה) -->
+                <div class="flex items-center gap-2 ui-element flex-wrap">
+                    <button id="expand-btn" class="action-button relative" title="הרחב קן">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16zM2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10S2 17.523 2 12zm9 4h2v-3h3v-2h-3V8h-2v3H8v2h3v3z"/></svg>
+                        <span id="queue-count" class="queue-badge">0</span>
+                    </button>
+                    <button id="dig-food-storage-btn" class="action-button" title="חפור מחסן מזון">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17.841 15.354A6.022 6.022 0 0 1 18 16a6 6 0 1 1-6-6c.69 0 1.347.116 1.962.327l-1.31 1.31L14.06 13l1.31-1.31-1.342 1.342 3.813 2.322zM12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10zm0-2a8 8 0 1 0 0-16 8 8 0 0 0 0 16z"/></svg>
+                    </button>
+                    <button id="dig-water-storage-btn" class="action-button" title="חפור מאגר מים">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c-5.523 0-10 4.477-10 10 0 4.02 2.37 7.47 5.8 9.1L12 21.6l4.2-2.5C19.63 17.47 22 14.02 22 10 22 6.477 17.523 2 12 2zm0 13a3 3 0 1 1 0-6 3 3 0 0 1 0 6z"/></svg>
+                    </button>
+                    <button id="dig-nursery-btn" class="action-button" title="חפור חדר ילדות">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+                    </button>
+                    <button id="dig-debris-storage-btn" class="action-button" title="חפור מחסן חומרים">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 19H5V5h14v14zM5 3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2H5zm4 12h6v2H9v-2zm-2-4h10v2H7v-2zm4-4h2v2h-2V7z"/></svg>
+                    </button>
+                    <button id="xray-btn" class="action-button" title="קרני X">
+                       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5C21.27 7.61 17 4.5 12 4.5zm0 10c-2.48 0-4.5-2.02-4.5-4.5S9.52 5.5 12 5.5s4.5 2.02 4.5 4.5-2.02 4.5-4.5 4.5zm0-7a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z"/></svg>
+                    </button>
+                    <button id="help-btn" class="action-button" title="עזרה">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 10.89 13 11.5 13 13h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/></svg>
+                    </button>
+                    <button id="random-ant-camera-btn" class="action-button" title="מצלמה אקראית">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M4 4h3l2-2h6l2 2h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zm8 14a6 6 0 1 0 0-12 6 6 0 0 0 0 12zm0-10a4 4 0 1 1 0 8 4 4 0 0 1 0-8z"/></svg>
+                    </button>
+                </div>
+                <!-- צד שמאל של הממשק (נתוני משאבים) -->
+                <div class="flex items-center space-x-3 space-x-reverse">
+                    <div class="resource-box">עונה: <span id="season-display">קיץ</span></div>
+                    <div class="resource-box">🐜 <span id="population-count">1</span></div>
+                    <div class="resource-box" title="מזון למלכה">👑🌱 <span id="queen-food-count">0</span>/1</div>
+                    <div class="resource-box" title="מים למלכה">👑💧 <span id="queen-water-count">0</span>/1</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script type="importmap">
+        { "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        } }
+    </script>
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
+
+        // ====================================================================
+        // הגדרות ומשתני משחק גלובליים
+        // ====================================================================
+
+        // --- Game State ---
+        const gameState = {
+            population: 0,
+            queenLastLaidEggTime: 0,
+            foodForQueen: 0,
+            waterForQueen: 0,
+            visiblePopulation: 0,
+            selectedAnt: null,
+            previouslySelectedAnt: null,
+            ants: [],
+            larvae: [],
+            findings: [],
+            diggingParticles: [],
+            waterStorageParticles: [],
+            diggingQueue: [],
+            storageChamberQueue: [],
+            dugChamberPositions: [],
+            antModelTemplate: null,
+            seedModelTemplate: null,
+            grassModelTemplate: null,
+            treeModelTemplate: null,
+            stonesModelTemplate: null,
+            lightQueue: [],
+            storageChambers: {},
+            isRaining: false,
+            rainParticles: [],
+            rootsData: [],
+            treePath: [],
+            fpvCamera: null,
+            fpvRenderer: null,
+            isXrayMode: false,
+            isRandomCameraMode: false,
+            originalMaterials: new Map(),
+            ageSprite: null,
+            currentSeasonIndex: 0,
+            seasonTimer: 0
+        };
+
+        // --- Game Configuration ---
+        const CONFIG = {
+            SEASON_DURATION: 180, 
+            ANT_LIFESPAN_SEASONS: 10,
+            SEASONS: ['קיץ', 'סתיו', 'חורף', 'אביב'],
+            SEASON_COLORS: {
+                'קיץ': { light: 0xffecd1, fog: 0x312415 },
+                'סתיו': { light: 0xffd1a1, fog: 0x4a3a2a },
+                'חורף': { light: 0xccddee, fog: 0x556677 },
+                'אביב': { light: 0xfff4d1, fog: 0x3a4a3a }
+            },
+            CHAMBER_SPACING: 2.5,
+            LARVA_FEED_COUNT: 3,
+            EGG_LAY_INTERVAL: 60,
+        };
+        
+        const STORAGE_TYPES = {
+            FOOD: { color: 0xffd700, label: 'מחסן מזון' },
+            WATER: { color: 0x87ceeb, label: 'מאגר מים' },
+            NURSERY: { color: 0xffc0cb, label: 'חדר ילדות' },
+            DEBRIS_STORAGE: { color: 0x964b00, label: 'מחסן חומרים'}
+        };
+
+        const FINDING_TYPES = {
+            GRASS_BLADE: { geo: new THREE.BoxGeometry(0.02, 0.8, 0.02), material: new THREE.MeshStandardMaterial({ color: 0x556b2f }), value: 3, storageType: 'FOOD' },
+            CORN_KERNEL: { geo: new THREE.DodecahedronGeometry(0.1, 0), material: new THREE.MeshStandardMaterial({ color: 0xfbec5d }), value: 10, storageType: 'FOOD' },
+            BIG_CORN_KERNEL: { geo: new THREE.DodecahedronGeometry(0.5, 0), material: new THREE.MeshStandardMaterial({ color: 0xfbec5d }), value: 50, storageType: 'FOOD', requiredAnts: 3 },
+            SUNFLOWER_SEED: { model: true, value: 15, storageType: 'FOOD' },
+            WATER_DROP: { geo: new THREE.SphereGeometry(0.08, 16, 16), material: new THREE.MeshPhysicalMaterial({ color: 0xadd8e6, transmission: 1.0, roughness: 0.1, ior: 1.33, transparent: true, opacity: 0.8 }), value: 10, storageType: 'WATER' },
+            DEBRIS: { geo: new THREE.SphereGeometry(0.08, 5, 5), material: new THREE.MeshStandardMaterial({ color: 0x8b5a2b }), value: 1, storageType: 'DEBRIS_STORAGE' },
+        };
+        
+        // --- Materials ---
+        const MATERIALS = {
+            larva: new THREE.MeshStandardMaterial({ color: 0xf5f5dc, roughness: 0.8 }),
+            root: new THREE.MeshStandardMaterial({
+                color: 0x9966ff,
+                emissive: 0x9966ff,
+                emissiveIntensity: 1.0,
+                roughness: 0.8
+            }),
+            worker: new THREE.MeshStandardMaterial({ color: 0x2a2a2a, metalness: 0.6, roughness: 0.3, emissive: 0x00ffff, emissiveIntensity: 1.5 }),
+            queen: new THREE.MeshStandardMaterial({ color: 0x5c3a21, metalness: 0.8, roughness: 0.2, emissive: 0xffa500, emissiveIntensity: 0.5 }),
+            soldierAnt: new THREE.MeshStandardMaterial({ color: 0x8B0000, metalness: 0.7, roughness: 0.4, emissive: 0xff4500, emissiveIntensity: 1.0 }),
+            rainDrop: new THREE.MeshBasicMaterial({ color: 0x87ceeb, transparent: true, opacity: 0.5 }),
+            chamber: null, 
+            diggingParticle: new THREE.MeshStandardMaterial({ color: 0xab8a6b, transparent: true }),
+        };
+        
+        const cyberMaterials = {
+            worker: new THREE.MeshBasicMaterial({ color: 0x00ff00, wireframe: true }),
+            soldier: new THREE.MeshBasicMaterial({ color: 0xff4500, wireframe: true }),
+            queen: new THREE.MeshBasicMaterial({ color: 0xff00ff, wireframe: true }),
+            chamber: new THREE.MeshBasicMaterial({ color: 0x00ffff, wireframe: true }),
+            ground: new THREE.MeshBasicMaterial({ color: 0x4444ff, wireframe: true }),
+            finding: new THREE.MeshBasicMaterial({ color: 0xffff00, wireframe: true }),
+            root: new THREE.MeshBasicMaterial({ color: 0x9966ff, wireframe: true }),
+            larva: new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true }),
+        };
+
+        let scene, camera, renderer, controls, dirLight, ambientLight, skyPivot, moonLight;
+        let sun, moon, stars;
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        const clock = new THREE.Clock();
+        const frustum = new THREE.Frustum();
+        const antBox = new THREE.Box3();
+
+        // --- UI Elements ---
+        const UI = {
+            seasonDisplay: document.getElementById('season-display'),
+            population: document.getElementById('population-count'),
+            queueCount: document.getElementById('queue-count'),
+            queenFood: document.getElementById('queen-food-count'),
+            queenWater: document.getElementById('queen-water-count'),
+            expandBtn: document.getElementById('expand-btn'),
+            digFoodStorageBtn: document.getElementById('dig-food-storage-btn'),
+            digWaterStorageBtn: document.getElementById('dig-water-storage-btn'),
+            digNurseryBtn: document.getElementById('dig-nursery-btn'),
+            digDebrisStorageBtn: document.getElementById('dig-debris-storage-btn'),
+            loadingScreen: document.getElementById('loading-screen'),
+            antCameraContainer: document.getElementById('ant-camera-container'),
+            xrayBtn: document.getElementById('xray-btn'),
+            helpBtn: document.getElementById('help-btn'),
+            helpModal: document.getElementById('help-modal'),
+            closeHelpBtn: document.querySelector('.close-help-btn'),
+            skyIcons: document.getElementById('sky-icons'),
+            seasonRing: document.getElementById('season-ring'),
+            thoughtBox: document.getElementById('ant-thought-box'),
+            randomAntCameraBtn: document.getElementById('random-ant-camera-btn'),
+        };
+        
+        const nest = new THREE.Group();
+        const nestNodes = [];
+
+        // ====================================================================
+        // פונקציות אתחול
+        // ====================================================================
+
+        function init() {
+            setupScene();
+            setupWorld();
+            setupEventListeners();
+            loadAssets();
+            animate();
+        }
+        
+        function setupScene() {
+            scene = new THREE.Scene();
+            
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 32, 20);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setClearColor(CONFIG.SEASON_COLORS['קיץ'].fog);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            document.body.appendChild(renderer.domElement);
+
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.target.set(0, 25, 0);
+            controls.enableDamping = true;
+            controls.minDistance = 2;
+            controls.maxDistance = 50;
+
+            ambientLight = new THREE.AmbientLight(0x404040, 0.5);
+            scene.add(ambientLight);
+            dirLight = new THREE.DirectionalLight(CONFIG.SEASON_COLORS['קיץ'].light, 2.5);
+            dirLight.castShadow = true;
+            dirLight.shadow.camera.top = 25; dirLight.shadow.camera.bottom = -25;
+            dirLight.shadow.camera.left = -25; dirLight.shadow.camera.right = 25;
+            dirLight.shadow.camera.near = 0.5; dirLight.shadow.camera.far = 60;
+            dirLight.shadow.mapSize.width = 2048; dirLight.shadow.mapSize.height = 2048;
+        }
+
+        function setupWorld() {
+            const soilTexture = createSoilTexture();
+            MATERIALS.chamber = new THREE.MeshStandardMaterial({ map: soilTexture, side: THREE.BackSide, metalness: 0.2, roughness: 0.7 });
+            
+            const groundGeo = new THREE.PlaneGeometry(1000, 1000);
+            const groundMat = new THREE.MeshStandardMaterial({ map: soilTexture, side: THREE.DoubleSide });
+            const groundPlane = new THREE.Mesh(groundGeo, groundMat);
+            groundPlane.rotation.x = -Math.PI / 2;
+            groundPlane.position.y = 30;
+            groundPlane.receiveShadow = true;
+            groundPlane.name = 'ground';
+            scene.add(groundPlane);
+
+            const lightBlockerGeo = new THREE.PlaneGeometry(1000, 1000);
+            const lightBlockerMat = new THREE.ShadowMaterial({ opacity: 0.4 });
+            const lightBlockerPlane = new THREE.Mesh(lightBlockerGeo, lightBlockerMat);
+            lightBlockerPlane.rotation.x = -Math.PI / 2;
+            lightBlockerPlane.position.y = 29.95;
+            lightBlockerPlane.receiveShadow = true;
+            scene.add(lightBlockerPlane);
+
+            const strataTexture = createStrataTexture();
+            const earthMaterials = [
+                new THREE.MeshBasicMaterial({ visible: false }),
+                new THREE.MeshBasicMaterial({ visible: false }),
+                new THREE.MeshStandardMaterial({ map: strataTexture, side: THREE.BackSide }),
+                new THREE.MeshBasicMaterial({ visible: false }),
+                new THREE.MeshBasicMaterial({ visible: false }),
+                new THREE.MeshBasicMaterial({ visible: false }),
+            ];
+            const earthGeo = new THREE.BoxGeometry(1000, 1000, 1000);
+            const earthBox = new THREE.Mesh(earthGeo, earthMaterials);
+            earthBox.position.y = 500;
+            earthBox.name = 'earthBox';
+            scene.add(earthBox);
+
+            setupSky();
+            createInitialNest();
+            createAnthill();
+            createRoots();
+            createSurfaceVegetation();
+            initAntCamera();
+        }
+
+        function setupSky() {
+            skyPivot = new THREE.Object3D();
+            scene.add(skyPivot);
+
+            const sunGeo = new THREE.SphereGeometry(5, 32, 32);
+            const sunMat = new THREE.MeshBasicMaterial({ color: 0xffddaa, fog: false });
+            sun = new THREE.Mesh(sunGeo, sunMat);
+            sun.position.set(0, 0, -150);
+            skyPivot.add(sun);
+
+            skyPivot.add(dirLight);
+            skyPivot.add(dirLight.target);
+            dirLight.position.copy(sun.position);
+            dirLight.target.position.set(0, 0, 0);
+
+            const moonGeo = new THREE.SphereGeometry(3, 32, 32);
+            const moonMat = new THREE.MeshBasicMaterial({ color: 0xcccccc, fog: false });
+            moon = new THREE.Mesh(moonGeo, moonMat);
+            moon.position.set(0, 0, 150);
+            skyPivot.add(moon);
+
+            moonLight = new THREE.DirectionalLight(0x604080, 0);
+            moonLight.position.copy(moon.position);
+            skyPivot.add(moonLight);
+
+            const starVertices = [];
+            for (let i = 0; i < 10000; i++) {
+                const x = THREE.MathUtils.randFloatSpread(2000);
+                const y = THREE.MathUtils.randFloatSpread(2000);
+                const z = THREE.MathUtils.randFloatSpread(2000);
+                starVertices.push(x, y, z);
+            }
+            const starGeo = new THREE.BufferGeometry();
+            starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starVertices, 3));
+            const starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.5, fog: false });
+            stars = new THREE.Points(starGeo, starMat);
+            stars.visible = false;
+            scene.add(stars);
+        }
+        
+        function loadAssets() {
+            const loader = new GLTFLoader();
+            const models = {
+                ant: 'https://raw.githubusercontent.com/orengamchi/avatari/main/ant_walkcycle.glb',
+                seed: 'https://raw.githubusercontent.com/orengamchi/ant_city/main/sunflower_seed.glb',
+                grass: 'https://raw.githubusercontent.com/orengamchi/ant_city/main/grass.glb',
+                tree: 'https://raw.githubusercontent.com/orengamchi/ant_city/main/mango_tree.glb',
+                stones: 'https://raw.githubusercontent.com/orengamchi/ant_city/main/stones.glb'
+            };
+
+            const modelLoadingPromise = Promise.all(
+                Object.entries(models).map(([name, url]) => {
+                    const rawUrl = url.replace('github.com', 'raw.githubusercontent.com').replace('/blob/', '/');
+                    return new Promise((resolve, reject) => loader.load(rawUrl, resolve, undefined, reject)).then(gltf => ({ name, gltf }));
+                })
+            );
+
+            const minDelayPromise = new Promise(resolve => setTimeout(resolve, 4000));
+
+            Promise.all([modelLoadingPromise, minDelayPromise]).then(([results]) => {
+                results.forEach(({ name, gltf }) => {
+                    if (name === 'ant') gameState.antModelTemplate = gltf;
+                    else gameState[`${name}ModelTemplate`] = gltf.scene;
+                });
+
+                createQueen();
+                
+                const initialAnts = [];
+                for (let i = 0; i < 280; i++) initialAnts.push(createAnt('worker', new THREE.Vector3(0, -1000, 0), false));
+                for (let i = 0; i < 20; i++) initialAnts.push(createAnt('soldier', new THREE.Vector3(0, -1000, 0), false));
+
+                placeTree();
+                
+                const workers = initialAnts.filter(a => a.type === 'worker');
+                const soldiers = initialAnts.filter(a => a.type === 'soldier');
+
+                const surfaceWorkers = workers.slice(0, 240);
+                const surfaceSoldiers = soldiers.slice(0, 15);
+                const surfaceDwellers = [...surfaceWorkers, ...surfaceSoldiers];
+
+                const nestDwellers = initialAnts.filter(ant => !surfaceDwellers.includes(ant));
+
+                surfaceDwellers.forEach(ant => {
+                    ant.mesh.position.set((Math.random() - 0.5) * 80, 30, (Math.random() - 0.5) * 80);
+                    scene.add(ant.mesh);
+                });
+
+                nestDwellers.forEach(ant => {
+                    const randomNode = getRandomInternalNode();
+                    if(randomNode) {
+                        ant.mesh.position.copy(randomNode.position);
+                    } else {
+                        ant.mesh.position.copy(gameState.storageChambers.QUEEN.position);
+                    }
+                    nest.add(ant.mesh);
+                });
+
+
+                placeStones();
+                placeGrass();
+                updateUI();
+
+                UI.loadingScreen.style.opacity = '0';
+                UI.loadingScreen.addEventListener('transitionend', () => {
+                   UI.loadingScreen.style.display = 'none';
+                   const video = document.getElementById('intro-video');
+                   if(video) video.pause();
+                });
+
+            }).catch(error => {
+                console.error("Error loading models:", error);
+                UI.loadingScreen.innerHTML = "שגיאה בטעינת המודלים.";
+            });
+        }
+
+        // ====================================================================
+        // לולאת המשחק הראשית
+        // ====================================================================
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = clock.getDelta();
+            const time = clock.getElapsedTime();
+            
+            camera.updateMatrixWorld(); 
+            const projScreenMatrix = new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+            frustum.setFromProjectionMatrix(projScreenMatrix);
+
+            updateTimers(delta);
+            updateWeather(delta);
+            updateAnts(delta, time);
+            updateLarvae();
+            updateParticles(delta, time);
+            updateSky(time);
+            updateFog();
+            updateGui(time);
+            processLightQueue();
+            updateUI(); 
+
+            controls.update();
+            render(time);
+        }
+
+        function updateTimers(delta) {
+             gameState.seasonTimer -= delta;
+            if (gameState.seasonTimer <= 0) changeSeason();
+        }
+        
+        function render(time) {
+            if (gameState.selectedAnt) updateFpvCamera(time);
+            updateSelectedAntBlink(time);
+            renderer.render(scene, camera);
+        }
+
+        function updateSky(time) {
+            const isAboveGround = camera.position.y >= 29.8;
+            sun.visible = isAboveGround;
+            moon.visible = isAboveGround;
+            stars.visible = isAboveGround;
+
+            if (!isAboveGround) return; 
+
+            const cycleDuration = 120;
+            const angle = (time / cycleDuration) * Math.PI * 2;
+            skyPivot.rotation.x = angle; 
+
+            const sunWorldPosition = new THREE.Vector3();
+            sun.getWorldPosition(sunWorldPosition);
+
+            if (sunWorldPosition.y < -10) { // Night
+                dirLight.intensity = THREE.MathUtils.lerp(dirLight.intensity, 0.0, 0.05);
+                moonLight.intensity = THREE.MathUtils.lerp(moonLight.intensity, 1.5, 0.05);
+                ambientLight.intensity = THREE.MathUtils.lerp(ambientLight.intensity, 0.2, 0.05);
+                stars.visible = true;
+                moon.visible = true;
+            } else { // Day
+                const intensityMultiplier = Math.max(0, sunWorldPosition.y / 150);
+                dirLight.intensity = THREE.MathUtils.lerp(dirLight.intensity, 2.5 * intensityMultiplier, 0.05);
+                moonLight.intensity = THREE.MathUtils.lerp(moonLight.intensity, 0, 0.05);
+                ambientLight.intensity = THREE.MathUtils.lerp(ambientLight.intensity, 0.5, 0.05);
+                stars.visible = false;
+                moon.visible = false;
+            }
+        }
+
+        function updateFog() {
+            if (gameState.isXrayMode) {
+                if (scene.fog) scene.fog = null;
+                renderer.setClearColor(0x000005);
+                return;
+            }
+
+            const y = camera.position.y;
+            if (y < 29.8) { // Underground
+                const undergroundFogColor = 0x2a1f14;
+                if (!scene.fog || scene.fog.color.getHex() !== undergroundFogColor) {
+                    scene.fog = new THREE.Fog(undergroundFogColor, 1, 25);
+                    renderer.setClearColor(undergroundFogColor);
+                }
+            } else if (y >= 29.8 && y < 30.2) { // Transition
+                const transitionColor = 0x3d2d1b;
+                 if (!scene.fog || scene.fog.color.getHex() !== transitionColor) {
+                    scene.fog = new THREE.Fog(transitionColor, 0.01, 1);
+                    renderer.setClearColor(transitionColor);
+                }
+            } else { // Above ground
+                const season = CONFIG.SEASONS[gameState.currentSeasonIndex];
+                const colors = CONFIG.SEASON_COLORS[season];
+                if (!scene.fog || scene.fog.color.getHex() !== colors.fog) {
+                    scene.fog = new THREE.Fog(colors.fog, 25, 200); 
+                    renderer.setClearColor(colors.fog);
+                }
+            }
+        }
+        
+        function updateGui(time) {
+            const cycleDuration = 120;
+            const dayNightAngle = (time / cycleDuration) * 360;
+            UI.skyIcons.style.transform = `rotate(${dayNightAngle}deg)`;
+
+            const totalTime = CONFIG.SEASON_DURATION * 4;
+            const currentTimeInCycle = (time % totalTime);
+            const seasonAngle = (currentTimeInCycle / totalTime) * 360;
+            UI.seasonRing.style.transform = `rotate(${seasonAngle}deg)`;
+        }
+
+        function processLightQueue() {
+            if (gameState.lightQueue.length > 0) {
+                const lightData = gameState.lightQueue.shift();
+                const light = new THREE.PointLight(lightData.color, lightData.intensity, lightData.distance, 2);
+                light.position.copy(lightData.position);
+                nest.add(light);
+            }
+        }
+        
+        // ====================================================================
+        // לוגיקת משחק מרכזית
+        // ====================================================================
+        
+        function changeSeason() {
+            gameState.currentSeasonIndex = (gameState.currentSeasonIndex + 1) % CONFIG.SEASONS.length;
+            gameState.seasonTimer = CONFIG.SEASON_DURATION;
+            const season = CONFIG.SEASONS[gameState.currentSeasonIndex];
+            dirLight.color.setHex(CONFIG.SEASON_COLORS[season].light);
+            gameState.isRaining = (season === 'חורף');
+            if (!gameState.isRaining) { 
+                gameState.rainParticles.forEach(p => scene.remove(p)); 
+                gameState.rainParticles.length = 0; 
+            }
+            growRoots();
+            updateSurfaceForSeason();
+        }
+
+        function updateSurfaceForSeason() {
+            for (let i = gameState.findings.length - 1; i >= 0; i--) {
+                const finding = gameState.findings[i];
+                if (finding.mesh.position.y >= 30) { 
+                    scene.remove(finding.mesh); 
+                    gameState.findings.splice(i, 1); 
+                }
+            }
+            const season = CONFIG.SEASONS[gameState.currentSeasonIndex];
+            let numItems = 0;
+            const surfaceY = 30;
+
+            if (season === 'קיץ') {
+                numItems = 200;
+                // Spawn one large item in summer
+                createFinding(new THREE.Vector3((Math.random() - 0.5) * 40, 30, (Math.random() - 0.5) * 40), 'BIG_CORN_KERNEL');
+            }
+            if (season === 'אביב') {
+                numItems = 150;
+                for (let i = 0; i < 75; i++) {
+                    const x = (Math.random() - 0.5) * 80; 
+                    const z = (Math.random() - 0.5) * 80;
+                    createFinding(new THREE.Vector3(x, surfaceY, z), 'SUNFLOWER_SEED');
+                }
+            }
+            if (season === 'סתיו') numItems = 100;
+            
+            for (let i = 0; i < numItems; i++) {
+                const x = (Math.random() - 0.5) * 80; 
+                const z = (Math.random() - 0.5) * 80;
+                createFinding(new THREE.Vector3(x, surfaceY, z), Math.random() < 0.8 ? 'GRASS_BLADE' : 'CORN_KERNEL');
+            }
+        }
+
+        function createInitialNest() {
+            scene.add(nest);
+            const queenChamberGeo = new THREE.SphereGeometry(2.0, 20, 20);
+            deformGeometry(queenChamberGeo, 0.3);
+            const queenChamber = new THREE.Mesh(queenChamberGeo, MATERIALS.chamber);
+            queenChamber.position.set(0, 25, 0);
+            queenChamber.userData = { isChamber: true, neighbors: [] };
+            queenChamber.receiveShadow = true;
+            nest.add(queenChamber);
+            nestNodes.push(queenChamber);
+            gameState.dugChamberPositions.push(queenChamber.position.clone());
+            gameState.storageChambers.QUEEN = queenChamber;
+            addNestLight(queenChamber.position, 0xffa500);
+        }
+        
+        function expandNest() {
+            if (Math.random() < 0.3) { 
+                createCorridorTask(); 
+                return; 
+            }
+            const { parentNode, site, finalPos } = findValidPlacementForChamber(1.5 + Math.random() * 1);
+            if (!parentNode) return;
+            const task = { site, finalPos, chamberRadius: finalPos.radius, startTime: null, duration: 12000, parentNode };
+            gameState.diggingQueue.push(task);
+        }
+        
+        function createCorridorTask() {
+            const { parentNode, site, finalPos } = findValidPlacementForChamber(0.6, 12);
+            if (!parentNode) return;
+            const task = { site, finalPos, chamberRadius: 0.6, startTime: null, duration: 8000, parentNode, isCorridor: true };
+            gameState.diggingQueue.push(task);
+        }
+
+        function createStorageChamberTask(storageType) {
+            if (gameState.storageChambers[storageType]) return;
+            const { parentNode, site, finalPos } = findValidPlacementForChamber(2.0);
+            if (!parentNode) return;
+            const task = { site, finalPos, chamberRadius: finalPos.radius, startTime: null, duration: 15000, parentNode, storageType };
+            gameState.storageChamberQueue.push(task);
+        }
+        
+        function createQueen() {
+            const queenModel = SkeletonUtils.clone(gameState.antModelTemplate.scene);
+            queenModel.scale.set(8.0, 8.0, 8.0);
+            queenModel.position.copy(gameState.storageChambers.QUEEN.position);
+            queenModel.position.y -= 1.5;
+
+            const queenMixer = new THREE.AnimationMixer(queenModel);
+            queenMixer.clipAction(gameState.antModelTemplate.animations[0]).play();
+            
+            const queenAnt = { mesh: queenModel, mixer: queenMixer, isQueen: true, state: 'idle' };
+            queenModel.traverse(child => { 
+                if (child.isSkinnedMesh) { 
+                    child.material = MATERIALS.queen.clone(); 
+                    child.castShadow = true; 
+                } 
+                child.userData.antReference = queenAnt; 
+            });
+            gameState.ants.push(queenAnt);
+            gameState.population++;
+            nest.add(queenModel);
+        }
+
+        function createAnt(type, position, addToScene = true) {
+            gameState.population++;
+            const model = SkeletonUtils.clone(gameState.antModelTemplate.scene);
+            const ant = { 
+                mesh: model, 
+                mixer: null, 
+                state: 'wandering', 
+                path: null, 
+                pathStep: 0, 
+                speed: 0.008 + Math.random() * 0.005, 
+                type: type,
+                task: 'general',
+                lifespan: CONFIG.SEASON_DURATION * (8 + Math.random() * 4) // Lifespan of 8-12 seasons
+            };
+            let antMaterialToUse = (type === 'soldier') ? MATERIALS.soldierAnt : MATERIALS.worker;
+            
+            model.traverse(child => {
+                if (child.isSkinnedMesh) {
+                    child.material = antMaterialToUse.clone();
+                    child.castShadow = true;
+                }
+                child.userData.antReference = ant;
+            });
+
+            model.scale.set(2.5, 2.5, 2.5);
+
+            const mixer = new THREE.AnimationMixer(model);
+            mixer.clipAction(gameState.antModelTemplate.animations[0]).play();
+            ant.mixer = mixer;
+            model.position.copy(position);
+            gameState.ants.push(ant);
+            if(addToScene) nest.add(model);
+            return ant;
+        }
+
+        function killAnt(antToKill) {
+            if (antToKill.isQueen) return;
+
+            const index = gameState.ants.indexOf(antToKill);
+            if (index > -1) gameState.ants.splice(index, 1);
+
+            if (antToKill === gameState.selectedAnt) {
+                gameState.selectedAnt = null;
+                UI.antCameraContainer.style.display = 'none';
+            }
+            if (antToKill === gameState.previouslySelectedAnt) {
+                gameState.previouslySelectedAnt = null;
+            }
+
+            // Handle group carry cleanup
+            if (antToKill.target && antToKill.target.requiredAnts) {
+                const finding = antToKill.target;
+                const antIndexInGroup = finding.collectingAnts.indexOf(antToKill);
+                if (antIndexInGroup > -1) {
+                    finding.collectingAnts.splice(antIndexInGroup, 1);
+                }
+                if (antToKill.isLeader) {
+                     if(finding.mesh.parent) finding.mesh.parent.remove(finding.mesh);
+                     scene.add(finding.mesh);
+                     finding.mesh.position.copy(antToKill.mesh.position);
+                     finding.state = 'uncollected';
+                     finding.collectingAnts.forEach(a => {
+                         a.state = 'wandering';
+                         a.target = null;
+                         a.isLeader = false;
+                     });
+                     finding.collectingAnts = [];
+                }
+            }
+
+
+            if (antToKill.mesh.parent) {
+                 antToKill.mesh.parent.remove(antToKill.mesh);
+            }
+            
+            gameState.population--;
+        }
+        
+        function updateAnts(delta, time) {
+            let visibleAnts = 0;
+            if (gameState.storageChamberQueue.length > 0 || gameState.diggingQueue.length > 0) {
+                let idleAnt = gameState.ants.find(ant => !ant.isQueen && ant.type === 'worker' && ant.state === 'wandering' && ant.task === 'general');
+                if (idleAnt) {
+                    const task = gameState.storageChamberQueue.shift() || gameState.diggingQueue.shift();
+                    idleAnt.state = 'movingToDig';
+                    idleAnt.path = findPath(getClosestNode(idleAnt.mesh.position), task.parentNode);
+                    idleAnt.pathStep = 0; 
+                    idleAnt.digTarget = task;
+                }
+            }
+
+            const queen = gameState.ants.find(a => a.isQueen);
+            if (queen) {
+                 antBox.setFromObject(queen.mesh);
+                if (frustum.intersectsBox(antBox)) {
+                    if (queen.mixer) queen.mixer.update(delta);
+                    visibleAnts++;
+                }
+                if (gameState.storageChambers.NURSERY && gameState.foodForQueen >= 1 && gameState.waterForQueen >= 1 && (time - gameState.queenLastLaidEggTime > CONFIG.EGG_LAY_INTERVAL)) {
+                    gameState.foodForQueen--; 
+                    gameState.waterForQueen--; 
+                    layEgg(); 
+                    gameState.queenLastLaidEggTime = time; 
+                }
+            }
+            
+            for (let i = gameState.ants.length - 1; i >= 0; i--) {
+                const ant = gameState.ants[i];
+                if (ant.isQueen) continue;
+
+                ant.lifespan -= delta;
+                if (ant.lifespan <= 0) {
+                    killAnt(ant);
+                    continue; 
+                }
+                
+                antBox.setFromObject(ant.mesh);
+                if (frustum.intersectsBox(antBox)) {
+                    visibleAnts++;
+                    if(ant.mixer) ant.mixer.update(delta);
+                    handleAntAI(ant, time);
+                }
+            }
+
+            gameState.visiblePopulation = visibleAnts;
+        }
+        
+        const antThoughts = {
+            wandering: { current: "משוטטת בקן, מחפשת משימה חדשה.", next: "אחפש מזון, מים, או אולי אלך לחפור." },
+            movingToDig: { current: "קיבלתי הוראה לחפור, אני בדרך לאתר הבנייה!", next: "כשאגיע, אתחיל לחצוב מנהרה חדשה." },
+            digging: { current: "חופרת! איזה כיף ליצור חללים חדשים למושבה.", next: "נשאר עוד קצת עד שהמנהרה תהיה מוכנה." },
+            collecting: { current: "זיהיתי פריט מעניין, הולכת לבדוק.", next: "אם זה שימושי, אקח אותו חזרה לקן." },
+            carrying: { current: "מצאתי משהו! סוחבת אותו למחסן המתאים.", next: "אמסור את המטען ואחזור לחפש עוד." },
+            collectingForQueen: { current: "המלכה רעבה! אני חייבת למצוא לה אוכל/מים.", next: "אביא לה את המשאב הכי מהר שאפשר." },
+            carryingToQueen: { current: "בדרך למלכה עם משלוח מיוחד.", next: "אחרי שאמסור לה, אחזור לעבודה." },
+            collectingForLarva: { current: "הזחלים הקטנים צריכים לאכול.", next: "אמצא משהו מזין ואביא להם." },
+            carryingToLarva: { current: "עם אוכל לזחל, שיגדל להיות נמלה חזקה!", next: "אאכיל אותו ואצא למשימה הבאה." },
+            movingToTreeBase: { current: "יוצאת למסע אל העץ הגדול.", next: "כשאגיע לבסיס, אתחיל לטפס." },
+            climbingTree: { current: "מטפסת על העץ, איזה נוף!", next: "אחפש עלים טעימים בין הענפים." },
+            gatheringFromTree: { current: "אוספת עלה רענן מהעץ.", next: "אקח אותו למחסן החומרים בקן." },
+            returningFromTree: { current: "יורדת מהעץ עם השלל שלי.", next: "הדרך חזרה לקן ארוכה." },
+            movingToLargeFinding: { current: "זיהיתי פריט גדול, קוראת לחברות לעזרה!", next: "נצטרך להרים אותו יחד." },
+            waitingForHelp: { current: "מחכה לתגבורת. הפריט הזה כבד מדי בשבילי לבד.", next: "כשכולן יגיעו, נתחיל לסחוב." },
+            carryingLargeFinding: { current: "יחד אנחנו חזקות! סוחבות את המטען הכבד לקן.", next: "זה יהיה אוכל להרבה זמן." },
+            returningToNest: { current: "מתחיל לרדת גשם, חוזרת מהר לקן!", next: "אחכה בפנים עד שהסערה תעבור." },
+            moveToGuardPost: { current: "הולכת לעמדת השמירה שלי.", next: "אשמור על הקן מפני פולשים." },
+            guarding: { current: "שומרת על המושבה. שום דבר לא יפתיע אותנו.", next: "אשאר עירנית ומוכנה לכל תרחיש." },
+        };
+
+        function handleAntAI(ant, time) {
+            const moveLogic = (targetPos, speed, isReturning = false) => {
+                const offsetAmount = 0.2;
+                const direction = targetPos.clone().sub(ant.mesh.position).normalize();
+                const up = new THREE.Vector3(0, 1, 0);
+                const offsetDirection = new THREE.Vector3().crossVectors(direction, up).normalize();
+
+                if (!isReturning) {
+                    offsetDirection.negate();
+                }
+
+                const offsetTarget = targetPos.clone().add(offsetDirection.multiplyScalar(offsetAmount));
+
+                smoothLookAt(ant.mesh, offsetTarget, 0.1);
+                ant.mesh.position.lerp(offsetTarget, speed);
+                if (ant.mesh.position.distanceTo(offsetTarget) < 0.3) ant.pathStep++;
+            };
+            
+            const followVectorPath = (path, speed, isReturning = false) => {
+                 if (!ant.path || ant.pathStep >= path.length) {
+                    return true;
+                }
+                const targetPos = path[ant.pathStep];
+                
+                const offsetAmount = 0.2;
+                const direction = targetPos.clone().sub(ant.mesh.position).normalize();
+                const up = new THREE.Vector3(0, 1, 0);
+                const offsetDirection = new THREE.Vector3().crossVectors(direction, up).normalize();
+                if (!isReturning) offsetDirection.negate();
+                const offsetTarget = targetPos.clone().add(offsetDirection.multiplyScalar(offsetAmount));
+                
+                smoothLookAt(ant.mesh, offsetTarget, 0.1);
+                const distanceToTarget = ant.mesh.position.distanceTo(offsetTarget);
+                const moveDistance = speed * 60 * clock.getDelta();
+                
+                if (distanceToTarget < moveDistance) {
+                    ant.mesh.position.copy(offsetTarget);
+                    ant.pathStep++;
+                } else {
+                    const moveDirection = offsetTarget.clone().sub(ant.mesh.position).normalize();
+                    ant.mesh.position.add(moveDirection.multiplyScalar(moveDistance));
+                }
+                return false;
+            };
+
+
+            if (gameState.isRaining && ant.mesh.position.y >= 30 && ant.state !== 'returningToNest') {
+                if (ant.target && ant.target.mesh && ant.mesh.children.includes(ant.target.mesh)) {
+                    const findingObj = ant.target; const worldPos = new THREE.Vector3();
+                    findingObj.mesh.getWorldPosition(worldPos);
+                    ant.mesh.remove(findingObj.mesh); scene.add(findingObj.mesh);
+                    findingObj.mesh.position.copy(worldPos); findingObj.state = 'uncollected';
+                    if(ant.state === 'collectingForLarva' && ant.targetLarva) ant.targetLarva.state = 'hungry';
+                    ant.target = null; ant.targetLarva = null;
+                }
+                ant.state = 'returningToNest';
+                ant.path = findPath(getClosestNode(ant.mesh.position), getRandomInternalNode());
+                ant.pathStep = 0;
+            }
+
+            if (ant.state === 'wandering' && (!ant.path || ant.pathStep >= ant.path.length)) {
+                if (ant.task === 'treeForager') {
+                     ant.state = 'movingToTreeBase';
+                     ant.path = findPath(getClosestNode(ant.mesh.position), nestNodes.find(n => n.userData.isExit));
+                     ant.pathStep = 0;
+                     return;
+                } else if(ant.type === 'soldier'){
+                    ant.guardPost = Math.random() > 0.5 ? gameState.storageChambers.QUEEN.position.clone() : nestNodes.find(n => n.userData.isExit).position.clone();
+                    ant.state = 'moveToGuardPost';
+                    ant.path = findPath(getClosestNode(ant.mesh.position), getClosestNode(ant.guardPost));
+                    ant.pathStep = 0;
+                     return;
+                }
+                
+                const accessibleFindings = gameState.findings.filter(f => f.state === 'uncollected' && (!gameState.isRaining || f.mesh.position.y < 30));
+                
+                const largeFindingToJoin = accessibleFindings.find(f => f.requiredAnts && f.collectingAnts.length > 0 && f.collectingAnts.length < f.requiredAnts && !f.collectingAnts.includes(ant));
+                if (largeFindingToJoin) {
+                    ant.state = 'movingToLargeFinding';
+                    ant.target = largeFindingToJoin;
+                    largeFindingToJoin.collectingAnts.push(ant);
+                    return;
+                }
+
+                const newLargeFinding = accessibleFindings.find(f => f.requiredAnts && f.collectingAnts.length === 0);
+                if (newLargeFinding) {
+                    ant.state = 'movingToLargeFinding';
+                    ant.target = newLargeFinding;
+                    newLargeFinding.collectingAnts.push(ant);
+                    return;
+                }
+
+                const needsFood = gameState.foodForQueen < 1;
+                const needsWater = gameState.waterForQueen < 1;
+                const availableFoodForQueen = accessibleFindings.find(f => f.storageType === 'FOOD' && !f.requiredAnts);
+                const availableWaterForQueen = accessibleFindings.find(f => f.storageType === 'WATER' && !f.requiredAnts);
+
+                if (needsFood && availableFoodForQueen) { ant.state = 'collectingForQueen'; ant.target = availableFoodForQueen; availableFoodForQueen.state = 'assigned'; ant.path = null; }
+                else if (needsWater && availableWaterForQueen) { ant.state = 'collectingForQueen'; ant.target = availableWaterForQueen; availableWaterForQueen.state = 'assigned'; ant.path = null; }
+                else {
+                    const hungryLarva = gameState.larvae.find(l => l.state === 'hungry' && l.feedCount < CONFIG.LARVA_FEED_COUNT);
+                    if (hungryLarva) {
+                        const resourceForLarva = accessibleFindings.find(f => (f.storageType === 'FOOD' || f.storageType === 'WATER') && !f.requiredAnts);
+                        if (resourceForLarva) { ant.state = 'collectingForLarva'; ant.target = resourceForLarva; ant.targetLarva = hungryLarva; resourceForLarva.state = 'assigned'; hungryLarva.state = 'assigned'; ant.path = null; }
+                    } else {
+                        const uncollectedFinding = accessibleFindings.find(f => !f.requiredAnts);
+                        if (uncollectedFinding) { ant.state = 'collecting'; ant.target = uncollectedFinding; uncollectedFinding.state = 'assigned'; ant.path = null; }
+                    }
+                }
+            }
+
+            if (ant.path === null && ['wandering', 'collecting', 'carrying', 'collectingForLarva', 'carryingToLarva', 'collectingForQueen', 'carryingToQueen', 'movingToLargeFinding'].includes(ant.state)) {
+                let startNode;
+                if (ant.mesh.position.y >= 30) {
+                    startNode = nestNodes.find(n => n.userData.isExit);
+                } else {
+                    startNode = getClosestNode(ant.mesh.position);
+                }
+
+                let endNode = null;
+                if (ant.state === 'wandering') endNode = gameState.isRaining ? getRandomInternalNode() : (Math.random() < 0.2 ? nestNodes.find(n => n.userData.isExit) : getRandomInternalNode());
+                else if (['collecting', 'collectingForLarva', 'collectingForQueen', 'movingToLargeFinding'].includes(ant.state)) endNode = getClosestNode(ant.target.mesh.position);
+                else if (ant.state === 'carryingToLarva') endNode = getClosestNode(ant.targetLarva.mesh.position);
+                else if (ant.state === 'carryingToQueen') endNode = gameState.storageChambers.QUEEN;
+                else if (ant.state === 'carrying') {
+                    const dropOffChamber = gameState.storageChambers[ant.target.storageType];
+                    endNode = getClosestNode(dropOffChamber ? dropOffChamber.position : gameState.storageChambers.QUEEN.position);
+                }
+                if (startNode && endNode) { ant.path = findPath(startNode, endNode); ant.pathStep = 0; }
+            }
+            
+            const isReturning = ['carrying', 'carryingToLarva', 'carryingToQueen', 'returningFromTree', 'returningToNest', 'carryingLargeFinding'].includes(ant.state);
+
+            switch (ant.state) {
+                 case 'movingToTreeBase':
+                    if (ant.path && ant.pathStep < ant.path.length) {
+                        moveLogic(ant.path[ant.pathStep].position, ant.speed, isReturning);
+                    } else {
+                        ant.state = 'climbingTree';
+                        ant.path = gameState.treePath;
+                        ant.pathStep = 1; 
+                    }
+                    break;
+                case 'climbingTree':
+                    if (followVectorPath(ant.path, ant.speed, isReturning)) {
+                        ant.state = 'gatheringFromTree';
+                        ant.gatherTimer = clock.getElapsedTime() + 3;
+                    }
+                    break;
+                case 'gatheringFromTree':
+                     if (clock.getElapsedTime() > ant.gatherTimer) {
+                        const leaf = new THREE.Mesh(FINDING_TYPES.GRASS_BLADE.geo, FINDING_TYPES.GRASS_BLADE.material);
+                        ant.mesh.add(leaf);
+                        leaf.scale.set(0.6, 0.6, 0.6);
+                        leaf.position.set(0, 0.15, 0.25);
+                        
+                        ant.target = { 
+                            mesh: leaf, 
+                            storageType: 'DEBRIS_STORAGE' 
+                        };
+
+                        ant.state = 'returningFromTree';
+                        ant.path = [...gameState.treePath].reverse();
+                        ant.pathStep = 1;
+                    }
+                    break;
+                case 'returningFromTree':
+                    if(followVectorPath(ant.path, ant.speed, isReturning)) {
+                        ant.state = 'carrying';
+                        ant.path = findPath(nestNodes.find(n => n.userData.isExit), getClosestNode(gameState.storageChambers.DEBRIS_STORAGE.position));
+                        ant.pathStep = 0;
+                    }
+                    break;
+                case 'movingToLargeFinding':
+                    if (ant.path && ant.pathStep < ant.path.length) {
+                        moveLogic(ant.path[ant.pathStep].position, ant.speed, isReturning);
+                    } else {
+                         if (ant.mesh.position.distanceTo(ant.target.mesh.position) < 1.0) {
+                            ant.state = 'waitingForHelp';
+                        } else {
+                            ant.mesh.position.lerp(ant.target.mesh.position, 0.05);
+                        }
+                    }
+                    break;
+                case 'waitingForHelp':
+                    if (ant.target.collectingAnts.length >= ant.target.requiredAnts) {
+                        ant.state = 'carryingLargeFinding';
+                        if (ant === ant.target.collectingAnts[0]) {
+                            ant.isLeader = true;
+                            const findingMesh = ant.target.mesh;
+                            ant.mesh.add(findingMesh);
+                            findingMesh.position.set(0, 0.5, 0); 
+                            const foodStorage = gameState.storageChambers.FOOD || gameState.storageChambers.QUEEN;
+                            ant.path = findPath(getClosestNode(ant.mesh.position), getClosestNode(foodStorage.position));
+                            ant.pathStep = 0;
+                        } else {
+                            ant.isLeader = false;
+                        }
+                    }
+                    break;
+                case 'carryingLargeFinding':
+                    const leader = ant.target.collectingAnts[0];
+                    if(!leader) { // Failsafe
+                        ant.state = 'wandering';
+                        break;
+                    }
+                    const foodStorage = gameState.storageChambers.FOOD || gameState.storageChambers.QUEEN;
+                    const destination = foodStorage.position;
+
+                    if (ant.isLeader) {
+                        if ((ant.path && ant.pathStep >= ant.path.length) || ant.mesh.position.distanceTo(destination) < 2.0) {
+                             const findingObj = ant.target;
+                            ant.mesh.remove(findingObj.mesh);
+                            const findingIndex = gameState.findings.indexOf(findingObj);
+                            if (findingIndex > -1) gameState.findings.splice(findingIndex, 1);
+                            scene.remove(findingObj.mesh);
+
+                            findingObj.collectingAnts.forEach(a => {
+                                a.state = 'wandering';
+                                a.target = null;
+                                a.isLeader = false;
+                                a.path = null;
+                            });
+                        } else {
+                             moveLogic(ant.path[ant.pathStep].position, ant.speed * 0.7, isReturning);
+                        }
+                    } else {
+                        const leaderPos = leader.mesh.position;
+                        const antIndex = ant.target.collectingAnts.indexOf(ant);
+                        const angle = (antIndex / (ant.target.collectingAnts.length -1)) * Math.PI;
+                        const offset = new THREE.Vector3(Math.cos(angle) * 0.5, 0, Math.sin(angle) * 0.5);
+                        const targetPos = leaderPos.clone().add(offset);
+                        ant.mesh.position.lerp(targetPos, 0.1);
+                        smoothLookAt(ant.mesh, leaderPos, 0.1);
+                    }
+                    break;
+
+                case 'wandering': case 'returningToNest':
+                    if (ant.path && ant.pathStep < ant.path.length) { 
+                        const speed = ant.state === 'returningToNest' ? ant.speed * 1.5 : ant.speed;
+                        moveLogic(ant.path[ant.pathStep].position, speed, isReturning);
+                    } else { ant.state = 'wandering'; ant.path = null; } 
+                    break;
+                case 'moveToGuardPost':
+                    if (ant.path && ant.pathStep < ant.path.length) {
+                        moveLogic(ant.path[ant.pathStep].position, ant.speed, isReturning);
+                    } else { ant.state = 'guarding'; }
+                    break;
+                case 'guarding':
+                    ant.mesh.position.x += Math.sin(time * 2 + ant.mesh.id) * 0.005;
+                    ant.mesh.rotation.y += 0.01;
+                    if (ant.mesh.position.distanceTo(ant.guardPost) > 2.0) { ant.state = 'wandering'; }
+                    break;
+                case 'collecting': case 'collectingForLarva': case 'collectingForQueen':
+                    if (ant.path && ant.pathStep < ant.path.length) {
+                        moveLogic(ant.path[ant.pathStep].position, ant.speed, isReturning);
+                    } else {
+                        const finalTargetPos = ant.target.mesh.position;
+                        if (finalTargetPos.y >= 30) {
+                            const surfaceTargetPos = finalTargetPos.clone(); surfaceTargetPos.y = 30;
+                            smoothLookAt(ant.mesh, surfaceTargetPos, 0.1);
+                            ant.mesh.position.lerp(surfaceTargetPos, ant.speed); ant.mesh.position.y = 30;
+                        } else {
+                            smoothLookAt(ant.mesh, finalTargetPos, 0.05);
+                            ant.mesh.position.lerp(finalTargetPos, 0.05);
+                        }
+                        const pickupDistance = ant.target.mesh.userData.findingType === 'SUNFLOWER_SEED' ? 0.5 : 0.3;
+                        if (ant.mesh.position.distanceTo(finalTargetPos) < pickupDistance) {
+                            let nextState = 'carrying';
+                            if (ant.state === 'collectingForLarva') nextState = 'carryingToLarva';
+                            if (ant.state === 'collectingForQueen') nextState = 'carryingToQueen';
+                            ant.state = nextState; ant.path = null;
+                            const findingMesh = ant.target.mesh; ant.mesh.add(findingMesh); findingMesh.scale.set(0.6, 0.6, 0.6); findingMesh.position.set(0, 0.15, 0.25);
+                        }
+                    }
+                    break;
+                case 'carrying': case 'carryingToLarva': case 'carryingToQueen':
+                    let dropOffTargetPosition;
+                    if (ant.state === 'carryingToLarva') dropOffTargetPosition = ant.targetLarva.mesh.position;
+                    else if (ant.state === 'carryingToQueen') dropOffTargetPosition = gameState.storageChambers.QUEEN.position;
+                    else {
+                       const dropOffChamber = gameState.storageChambers[ant.target.storageType];
+                       dropOffTargetPosition = dropOffChamber ? dropOffChamber.position : gameState.storageChambers.QUEEN.position;
+                    }
+
+                    if (ant.path && ant.pathStep < ant.path.length) { 
+                        moveLogic(ant.path[ant.pathStep].position, ant.speed, isReturning);
+                    } else {
+                        if (ant.mesh.position.y >= 30) {
+                            const surfaceTargetPos = dropOffTargetPosition.clone(); surfaceTargetPos.y = 30;
+                            smoothLookAt(ant.mesh, surfaceTargetPos, 0.1);
+                            ant.mesh.position.lerp(surfaceTargetPos, ant.speed); ant.mesh.position.y = 30;
+                        } else {
+                            smoothLookAt(ant.mesh, dropOffTargetPosition, 0.05);
+                            ant.mesh.position.lerp(dropOffTargetPosition, 0.05);
+                        }
+                        const dropOffDistance = (ant.state === 'carryingToLarva' ? 0.5 : 1.5);
+                        if (ant.mesh.position.distanceTo(dropOffTargetPosition) < dropOffDistance) {
+                            const findingObj = ant.target;
+                            ant.mesh.remove(findingObj.mesh);
+                            const findingIndex = gameState.findings.indexOf(findingObj);
+                            if (findingIndex > -1) gameState.findings.splice(findingIndex, 1);
+                            if (findingObj.mesh.parent === scene) scene.remove(findingObj.mesh);
+                            if (ant.state === 'carryingToLarva') { ant.targetLarva.feedCount++; ant.targetLarva.mesh.scale.multiplyScalar(1.4); ant.targetLarva.state = 'hungry'; } 
+                            else if (ant.state === 'carryingToQueen') { if (findingObj.storageType === 'FOOD') gameState.foodForQueen++; if (findingObj.storageType === 'WATER') gameState.waterForQueen++; } 
+                            else { findingObj.mesh.scale.set(1, 1, 1); scene.add(findingObj.mesh); const dropOffChamber = gameState.storageChambers[ant.target.storageType]; const randomPos = new THREE.Vector3((Math.random() - 0.5) * 1.5, dropOffChamber ? -dropOffChamber.geometry.parameters.radius * 0.8 : -1.5, (Math.random() - 0.5) * 1.5); findingObj.mesh.position.copy(dropOffTargetPosition).add(randomPos); }
+                            ant.state = 'wandering'; ant.path = null;
+                        }
+                    }
+                    break;
+                case 'movingToDig': case 'digging':
+                    if (ant.state === 'movingToDig') {
+                        if (ant.path && ant.pathStep < ant.path.length) { moveLogic(ant.path[ant.pathStep].position, ant.speed, isReturning); }
+                        else { 
+                            smoothLookAt(ant.mesh, ant.digTarget.site, 0.05);
+                            ant.mesh.position.lerp(ant.digTarget.site, 0.05);
+                            if (ant.mesh.position.distanceTo(ant.digTarget.site) < 0.2) {
+                                ant.state = 'digging'; ant.digTarget.startTime = time; setAntGlow(ant, true);
+                                const chamberGeo = ant.digTarget.isCorridor ? new THREE.BoxGeometry(0,0,0) : new THREE.SphereGeometry(ant.digTarget.chamberRadius, 16, 16);
+                                if (!ant.digTarget.isCorridor) deformGeometry(chamberGeo, 0.2);
+                                const newChamber = new THREE.Mesh(chamberGeo, MATERIALS.chamber); newChamber.position.copy(ant.digTarget.finalPos); newChamber.receiveShadow = true; newChamber.visible = false; nest.add(newChamber);
+                                const newTunnel = createCurvedTunnel(ant.digTarget.site, ant.digTarget.finalPos, 0.5); newTunnel.traverse(child => { if(child.isMesh) child.receiveShadow = true; }); nest.add(newTunnel);
+                                const tunnelMesh = newTunnel.children[0]; tunnelMesh.geometry.setDrawRange(0, 0); ant.digTarget.chamber = newChamber; ant.digTarget.tunnel = newTunnel;
+                            }
+                        }
+                    } else if (ant.state === 'digging') {
+                        if (Math.random() < 0.4) spawnDiggingEffect(ant.mesh.position, 3);
+                        const progress = Math.min(1, (clock.getElapsedTime() - ant.digTarget.startTime) * 1000 / ant.digTarget.duration);
+                        const curve = ant.digTarget.tunnel.userData.curve; const newAntPos = curve.getPoint(progress); ant.mesh.position.copy(newAntPos); ant.mesh.position.y += Math.sin(time * 60) * 0.03;
+                        if (progress < 1) { const tangent = curve.getTangent(progress); smoothLookAt(ant.mesh, newAntPos.clone().add(tangent), 0.2); ant.mesh.rotation.z += (Math.random() - 0.5) * 0.15; }
+                        const tunnelMesh = ant.digTarget.tunnel.children[0]; const totalIndices = tunnelMesh.geometry.index.count; const indicesToDraw = Math.floor(progress * totalIndices / 3) * 3; tunnelMesh.geometry.setDrawRange(0, indicesToDraw);
+                        if (progress >= 1) {
+                            ant.digTarget.chamber.visible = true; tunnelMesh.geometry.setDrawRange(0, Infinity); const newChamber = ant.digTarget.chamber; const parentNode = ant.digTarget.parentNode; const tunnelNodes = ant.digTarget.tunnel.userData.pathNodes;
+                            newChamber.userData = { isChamber: true, neighbors: [] }; tunnelNodes.forEach(node => nestNodes.push(node)); let lastNode = parentNode;
+                            for (const node of tunnelNodes) { lastNode.userData.neighbors.push(node); node.userData.neighbors.push(lastNode); lastNode = node; }
+                            if (!ant.digTarget.isCorridor) { 
+                                lastNode.userData.neighbors.push(newChamber); 
+                                newChamber.userData.neighbors.push(lastNode); 
+                                nestNodes.push(newChamber); 
+                                const lightColor = ant.digTarget.storageType ? STORAGE_TYPES[ant.digTarget.storageType].color : 0x00ffff;
+                                addNestLight(newChamber.position, lightColor);
+                            } else {
+                                addNestLight(lastNode.position, 0x00ffff);
+                            }
+                            
+                            gameState.dugChamberPositions.push(ant.digTarget.finalPos.clone());
+
+                            if (ant.digTarget.storageType) {
+                                const type = ant.digTarget.storageType; gameState.storageChambers[type] = newChamber;
+                                const markerGeo = new THREE.CircleGeometry(newChamber.geometry.parameters.radius * 0.8, 16); const markerMat = new THREE.MeshBasicMaterial({ color: STORAGE_TYPES[type].color, side: THREE.DoubleSide }); const marker = new THREE.Mesh(markerGeo, markerMat);
+                                marker.position.copy(newChamber.position).y -= newChamber.geometry.parameters.radius * 0.95; marker.rotation.x = -Math.PI / 2; nest.add(marker);
+                                const labelPosition = newChamber.position.clone(); labelPosition.y += newChamber.geometry.parameters.radius + 0.5; const textSprite = createTextSprite(STORAGE_TYPES[type].label, labelPosition); scene.add(textSprite);
+                                if (type === 'NURSERY') {
+                                    newChamber.userData.larvaSlots = []; const radius = newChamber.geometry.parameters.radius * 0.7; const rows = 5; const cols = 7;
+                                    for (let i = 0; i < rows; i++) for (let j = 0; j < cols; j++) { const angle = (j / cols) * Math.PI * 2; const dist = (i + 1) / (rows + 1) * radius; const x = Math.cos(angle) * dist; const z = Math.sin(angle) * dist; const y = -newChamber.geometry.parameters.radius * 0.8; const position = new THREE.Vector3(x, y, z).add(newChamber.position); newChamber.userData.larvaSlots.push({ position, occupied: false, larva: null });}
+                                }
+                                if (type === 'WATER') for (let i = 0; i < 30; i++) { const particleGeo = new THREE.SphereGeometry(0.05, 8, 8); const particleMesh = new THREE.Mesh(particleGeo, FINDING_TYPES.WATER_DROP.material); const randomPos = new THREE.Vector3().randomDirection().multiplyScalar(Math.random() * (newChamber.geometry.parameters.radius - 0.2)); particleMesh.position.copy(newChamber.position).add(randomPos); gameState.waterStorageParticles.push({ mesh: particleMesh, baseY: particleMesh.position.y, speed: Math.random() * 2 + 1, offset: Math.random() * Math.PI * 2 }); scene.add(particleMesh); }
+                            }
+                            spawnDebris(newChamber); if (Math.random() > 0.6) createFinding(newChamber.position);
+                            ant.state = 'wandering'; ant.path = null; setAntGlow(ant, false);
+                        }
+                    }
+                    break;
+            }
+        }
+        
+        function updateLarvae() {
+             for (let i = gameState.larvae.length - 1; i >= 0; i--) {
+                const larva = gameState.larvae[i];
+                if (larva.feedCount >= CONFIG.LARVA_FEED_COUNT) {
+                    const position = larva.mesh.position.clone();
+                    scene.remove(larva.mesh); 
+                    gameState.larvae.splice(i, 1);
+                    if (larva.slot) { 
+                        larva.slot.occupied = false; 
+                        larva.slot.larva = null; 
+                    }
+                    createAnt('worker', position);
+                }
+            }
+        }
+
+        function updateParticles(delta, time) {
+            gameState.waterStorageParticles.forEach(p => p.mesh.position.y = p.baseY + Math.sin(time * p.speed + p.offset) * 0.1);
+            for (let i = gameState.diggingParticles.length - 1; i >= 0; i--) { 
+                const p = gameState.diggingParticles[i]; 
+                p.velocity.y -= 9.8 * delta * 0.5; 
+                p.mesh.position.add(p.velocity.clone().multiplyScalar(delta)); 
+                p.lifespan -= delta; 
+                p.mesh.material.opacity = Math.max(0, p.lifespan); 
+                if (p.lifespan <= 0) { 
+                    scene.remove(p.mesh); 
+                    gameState.diggingParticles.splice(i, 1); 
+                } 
+            }
+        }
+
+        // ====================================================================
+        // פונקציות עזר (Helpers)
+        // ====================================================================
+
+        function updateUI() {
+            UI.population.textContent = `${gameState.visiblePopulation} / ${gameState.population}`;
+            UI.queueCount.textContent = gameState.diggingQueue.length + gameState.storageChamberQueue.length;
+            UI.queenFood.textContent = gameState.foodForQueen;
+            UI.queenWater.textContent = gameState.waterForQueen;
+            UI.seasonDisplay.textContent = CONFIG.SEASONS[gameState.currentSeasonIndex];
+        }
+        
+        function getClosestNode(position) {
+            if (position.y >= 30) { return nestNodes.find(n => n.userData.isExit); }
+            let closestNode = null; let minDistance = Infinity;
+            nestNodes.filter(n => !n.userData.isExit).forEach(node => {
+                const distance = position.distanceTo(node.position);
+                if (distance < minDistance) { minDistance = distance; closestNode = node; }
+            });
+            return closestNode;
+        }
+
+        function findPath(startNode, endNode) {
+            if (!startNode || !endNode || !startNode.userData.neighbors) return null; 
+            if (startNode === endNode) return [startNode];
+            const queue = [startNode]; 
+            const visited = new Set([startNode]); 
+            const parentMap = new Map();
+            while (queue.length > 0) { 
+                const currentNode = queue.shift(); 
+                if (currentNode === endNode) { 
+                    const path = []; 
+                    let current = endNode; 
+                    while (current) { 
+                        path.unshift(current); 
+                        current = parentMap.get(current); 
+                    } 
+                    return path; 
+                } 
+                for (const neighbor of currentNode.userData.neighbors) { 
+                    if (!visited.has(neighbor)) { 
+                        visited.add(neighbor); 
+                        parentMap.set(neighbor, currentNode); 
+                        queue.push(neighbor); 
+                    } 
+                } 
+            }
+            return null;
+        }
+        
+        function deformGeometry(geometry, amount) {
+            const posAttr = geometry.attributes.position; 
+            const vertex = new THREE.Vector3();
+            for (let i = 0; i < posAttr.count; i++) { 
+                vertex.fromBufferAttribute(posAttr, i); 
+                const disp = (Math.random() * amount) - (amount / 2); 
+                vertex.normalize().multiplyScalar(disp); 
+                posAttr.setXYZ(i, posAttr.getX(i) + vertex.x, posAttr.getY(i) + vertex.y, posAttr.getZ(i) + vertex.z); 
+            }
+            posAttr.needsUpdate = true; 
+            geometry.computeVertexNormals();
+        }
+        
+        function createTextSprite(text, position) {
+            const canvas = document.createElement('canvas'); const context = canvas.getContext('2d'); const fontSize = 48;
+            context.font = `bold ${fontSize}px Heebo, sans-serif`; const textWidth = context.measureText(text).width;
+            canvas.width = textWidth || 1; canvas.height = fontSize * 1.2;
+            context.font = `bold ${fontSize}px Heebo, sans-serif`; context.fillStyle = "rgba(255, 255, 255, 0.95)";
+            context.textAlign = 'center'; context.textBaseline = 'middle'; context.fillText(text, canvas.width / 2, canvas.height / 2);
+            const texture = new THREE.CanvasTexture(canvas); const spriteMaterial = new THREE.SpriteMaterial({ map: texture, depthTest: false, transparent: true });
+            const sprite = new THREE.Sprite(spriteMaterial);
+            sprite.position.copy(position); sprite.scale.set((textWidth/100) || 0.1, (fontSize * 1.2) / 100, 1.0);
+            return sprite;
+        }
+
+        function createSoilTexture() {
+            const canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 512; const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#6b4f35'; ctx.fillRect(0, 0, 512, 512);
+            for (let i = 0; i < 10000; i++) { const x = Math.random() * 512; const y = Math.random() * 512; const size = Math.random() * 2 + 1; ctx.fillStyle = Math.random() > 0.5 ? '#5a3f2a' : '#7b5f45'; ctx.fillRect(x, y, size, size); }
+            const texture = new THREE.CanvasTexture(canvas); texture.wrapS = THREE.RepeatWrapping; texture.wrapT = THREE.RepeatWrapping;
+            return texture;
+        }
+
+        function createStrataTexture() {
+            const canvas = document.createElement('canvas'); canvas.width = 256; canvas.height = 1024; const ctx = canvas.getContext('2d');
+            const colors = ['#5a3f2a', '#6b4f35', '#4a2f1a', '#7b5f45']; let y = 0;
+            while (y < canvas.height) {
+                const layerHeight = Math.random() * 100 + 50; ctx.fillStyle = colors[Math.floor(Math.random() * colors.length)];
+                ctx.fillRect(0, y, canvas.width, layerHeight);
+                for (let i = 0; i < 500; i++) { const x_n = Math.random() * canvas.width; const y_n = y + Math.random() * layerHeight; const size = Math.random() * 2 + 1; ctx.fillStyle = 'rgba(0,0,0,0.05)'; ctx.fillRect(x_n, y_n, size, size); }
+                y += layerHeight;
+            }
+            const texture = new THREE.CanvasTexture(canvas); texture.wrapS = THREE.RepeatWrapping; texture.wrapT = THREE.RepeatWrapping; texture.repeat.set(16, 4);
+            return texture;
+        }
+
+        function addNestLight(position, color, intensity = 1.0, distance = 10) {
+            gameState.lightQueue.push({position, color, intensity, distance});
+        }
+
+        function createAnthill() {
+            const moundMat = new THREE.MeshStandardMaterial({ map: createSoilTexture() });
+            const moundGeo = new THREE.ConeGeometry(4, 2, 32);
+            deformGeometry(moundGeo, 0.2);
+            const mound = new THREE.Mesh(moundGeo, moundMat);
+            mound.position.set(0, 30, 0); mound.receiveShadow = true; scene.add(mound);
+            const holeGeo = new THREE.CylinderGeometry(0.5, 0.5, 0.5, 16);
+            const holeMat = new THREE.MeshStandardMaterial({ color: 0x1a140d });
+            const hole = new THREE.Mesh(holeGeo, holeMat);
+            hole.position.set(0, 31, 0); scene.add(hole);
+            const startPoint = new THREE.Vector3(0, 30.5, 0);
+            const endPoint = gameState.storageChambers.QUEEN.position.clone().add(new THREE.Vector3(0, gameState.storageChambers.QUEEN.geometry.parameters.radius, 0));
+            const tunnel = createCurvedTunnel(startPoint, endPoint, 0.5);
+            nest.add(tunnel);
+            const tunnelNodes = tunnel.userData.pathNodes;
+            tunnelNodes.forEach(node => nestNodes.push(node));
+            let lastNode = gameState.storageChambers.QUEEN;
+            for (const node of [...tunnelNodes].reverse()) {
+                lastNode.userData.neighbors.push(node); node.userData.neighbors.push(lastNode);
+                lastNode = node;
+            }
+            const exitNode = new THREE.Object3D();
+            exitNode.position.copy(startPoint);
+            exitNode.userData = { neighbors: [lastNode], isExit: true };
+            nestNodes.push(exitNode);
+            lastNode.userData.neighbors.push(exitNode);
+
+            const entranceLight = new THREE.PointLight(0xff9900, 1.5, 10, 2);
+            entranceLight.position.set(0, 30, 0);
+            scene.add(entranceLight);
+        }
+
+        function createRoots() {
+            for(let i = 0; i < 25; i++) {
+                const startPoint = new THREE.Vector3((Math.random() - 0.5) * 40, 30, (Math.random() - 0.5) * 40);
+                const points = [startPoint];
+                let currentPoint = startPoint.clone();
+                
+                for(let j = 0; j < 2; j++) {
+                    const nextPoint = currentPoint.clone();
+                    nextPoint.y -= 2 + Math.random() * 2;
+                    nextPoint.x += (Math.random() - 0.5) * 2;
+                    nextPoint.z += (Math.random() - 0.5) * 2;
+                    points.push(nextPoint);
+                    currentPoint = nextPoint;
+                }
+
+                const curve = new THREE.CatmullRomCurve3(points);
+                const radius = 0.08 + Math.random() * 0.15;
+                const tubeGeo = new THREE.TubeGeometry(curve, 20, radius, 8, false);
+                deformGeometry(tubeGeo, 0.05);
+                const rootMesh = new THREE.Mesh(tubeGeo, MATERIALS.root);
+                rootMesh.receiveShadow = true; 
+                scene.add(rootMesh);
+                gameState.rootsData.push({ mesh: rootMesh, points: points, radius: radius, seasonAge: 0 });
+
+                const rootLight = {
+                    position: startPoint.clone().setY(startPoint.y - 1.5),
+                    color: 0x9966ff,
+                    intensity: 1.5,
+                    distance: 7
+                };
+                gameState.lightQueue.push(rootLight);
+            }
+        }
+        
+        function placeStones() {
+            if (!gameState.stonesModelTemplate) return;
+
+            for (let i = 0; i < 15; i++) {
+                const stone = SkeletonUtils.clone(gameState.stonesModelTemplate);
+                
+                stone.traverse(child => {
+                    if (child.isMesh) {
+                        child.castShadow = true;
+                        child.receiveShadow = true;
+                    }
+                });
+                
+                const scale = Math.random() * 0.4 + 0.2; 
+                stone.scale.set(scale, scale, scale);
+
+                stone.position.set(
+                    (Math.random() - 0.5) * 80,
+                    30,
+                    (Math.random() - 0.5) * 80
+                );
+                stone.rotation.y = Math.random() * Math.PI * 2;
+                
+                scene.add(stone);
+            }
+        }
+
+        function placeTree() {
+            if (!gameState.treeModelTemplate) return;
+            const tree = SkeletonUtils.clone(gameState.treeModelTemplate);
+
+            tree.traverse(child => {
+                if (child.isMesh) {
+                    child.castShadow = true;
+                    child.receiveShadow = true;
+                    if (child.material.name.toLowerCase().includes('leaves')) {
+                        child.material.alphaTest = 0.5;
+                        child.material.transparent = true; 
+                    }
+                }
+            });
+
+            tree.scale.set(1.5, 1.5, 1.5);
+            const treePosition = new THREE.Vector3(8, 30, -10);
+            tree.position.copy(treePosition);
+            scene.add(tree);
+
+            // Define the climbing path
+            gameState.treePath = [
+                new THREE.Vector3(0, 30.5, 0), // Nest exit
+                treePosition.clone().setY(30),   // Base of the tree
+                treePosition.clone().setY(32),   // Up the trunk
+                treePosition.clone().setY(34).add(new THREE.Vector3(1, 0, 1)), // Mid trunk
+                treePosition.clone().setY(36).add(new THREE.Vector3(-1, 0, -1)), // Higher trunk
+                treePosition.clone().setY(37.5).add(new THREE.Vector3(0, 0, 1.5)) // On a branch
+            ];
+        }
+
+        function placeGrass() {
+            if (!gameState.grassModelTemplate) return;
+            for (let i = 0; i < 20; i++) {
+                const grass = SkeletonUtils.clone(gameState.grassModelTemplate);
+                
+                grass.traverse(child => {
+                    if (child.isMesh) {
+                        child.castShadow = true;
+                         if (child.material) {
+                            child.material.alphaTest = 0.5;
+                            child.material.transparent = true;
+                        }
+                    }
+                });
+
+                const scale = Math.random() * 0.8 + 0.5;
+                grass.scale.set(scale, scale, scale);
+
+                grass.position.set(
+                    (Math.random() - 0.5) * 30,
+                    30,
+                    (Math.random() - 0.5) * 30
+                );
+                grass.rotation.y = Math.random() * Math.PI * 2;
+                scene.add(grass);
+            }
+        }
+        
+        function createSurfaceVegetation() {
+            const surfaceY = 30;
+            for (let i = 0; i < 200; i++) {
+                const x = (Math.random() - 0.5) * 80;
+                const z = (Math.random() - 0.5) * 80;
+                createFinding(new THREE.Vector3(x, surfaceY, z), Math.random() < 0.8 ? 'GRASS_BLADE' : 'CORN_KERNEL');
+            }
+        }
+        
+        function initAntCamera() {
+            const view = document.getElementById('ant-camera-view');
+            gameState.fpvCamera = new THREE.PerspectiveCamera(90, view.clientWidth / view.clientHeight, 0.01, 100);
+            gameState.fpvRenderer = new THREE.WebGLRenderer({ antialias: true });
+            gameState.fpvRenderer.setSize(view.clientWidth, view.clientHeight);
+            view.insertBefore(gameState.fpvRenderer.domElement, UI.thoughtBox);
+
+            const closeBtn = document.getElementById('close-ant-camera-btn');
+            closeBtn.addEventListener('click', () => {
+                gameState.selectedAnt = null;
+                gameState.isRandomCameraMode = false;
+                UI.antCameraContainer.style.display = 'none';
+            });
+            
+            new ResizeObserver(() => {
+                gameState.fpvRenderer.setSize(view.clientWidth, view.clientHeight);
+                gameState.fpvCamera.aspect = view.clientWidth / view.clientHeight;
+                gameState.fpvCamera.updateProjectionMatrix();
+            }).observe(view);
+
+            makeDraggable(UI.antCameraContainer, document.getElementById('ant-camera-header'));
+        }
+
+        function makeDraggable(element, handle) {
+            let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+            handle.onmousedown = dragMouseDown;
+
+            function dragMouseDown(e) {
+                e.preventDefault();
+                pos3 = e.clientX; pos4 = e.clientY;
+                document.onmouseup = closeDragElement;
+                document.onmousemove = elementDrag;
+            }
+
+            function elementDrag(e) {
+                e.preventDefault();
+                pos1 = pos3 - e.clientX; pos2 = pos4 - e.clientY;
+                pos3 = e.clientX; pos4 = e.clientY;
+                element.style.top = (element.offsetTop - pos2) + "px";
+                element.style.left = (element.offsetLeft - pos1) + "px";
+            }
+
+            function closeDragElement() {
+                document.onmouseup = null; document.onmousemove = null;
+            }
+        }
+
+        // --- Event Listeners ---
+        function setupEventListeners() {
+            UI.expandBtn.addEventListener('click', expandNest);
+            UI.digFoodStorageBtn.addEventListener('click', () => createStorageChamberTask('FOOD'));
+            UI.digWaterStorageBtn.addEventListener('click', () => createStorageChamberTask('WATER'));
+            UI.digNurseryBtn.addEventListener('click', () => createStorageChamberTask('NURSERY'));
+            UI.digDebrisStorageBtn.addEventListener('click', () => createStorageChamberTask('DEBRIS_STORAGE'));
+            UI.xrayBtn.addEventListener('click', toggleXrayMode);
+            UI.randomAntCameraBtn.addEventListener('click', activateRandomAntCamera);
+
+            UI.helpBtn.onclick = () => { UI.helpModal.style.display = "block"; };
+            UI.closeHelpBtn.onclick = () => { UI.helpModal.style.display = "none"; };
+            window.onclick = (event) => { if (event.target == UI.helpModal) { UI.helpModal.style.display = "none"; }};
+            
+            window.addEventListener('resize', onWindowResize);
+            window.addEventListener('dblclick', onDoubleClick);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function onDoubleClick(event) {
+             mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = - (event.clientY / window.innerHeight) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(scene.children, true);
+
+            for (const intersect of intersects) {
+                let antObj = intersect.object;
+                while (antObj) {
+                    if (antObj.userData.antReference) {
+                        gameState.selectedAnt = antObj.userData.antReference;
+                        gameState.isRandomCameraMode = false; // Reset the mode
+                        UI.antCameraContainer.style.display = 'flex';
+                        UI.thoughtBox.style.display = 'block'; // Make sure it's visible
+                        return;
+                    }
+                    antObj = antObj.parent;
+                }
+
+                 for (const rootData of gameState.rootsData) {
+                    if (rootData.mesh === intersect.object) {
+                        displayRootAge(rootData, intersect.point);
+                        return;
+                    }
+                }
+            }
+            if (gameState.selectedAnt) {
+                gameState.selectedAnt = null;
+                UI.antCameraContainer.style.display = 'none';
+            }
+        }
+        
+        function updateWeather(delta) {
+            const rainDropGeo = new THREE.CylinderGeometry(0.01, 0.01, 0.4, 4);
+            if (gameState.isRaining && gameState.rainParticles.length < 500 && Math.random() < 0.9) {
+                for (let i = 0; i < 10; i++) {
+                     const rainDrop = new THREE.Mesh(rainDropGeo, MATERIALS.rainDrop);
+                    rainDrop.position.set((Math.random() - 0.5) * 100, 50, (Math.random() - 0.5) * 100);
+                    scene.add(rainDrop);
+                    gameState.rainParticles.push(rainDrop);
+                }
+            }
+            for (let i = gameState.rainParticles.length - 1; i >= 0; i--) {
+                const drop = gameState.rainParticles[i];
+                drop.position.y -= 35 * delta;
+                if (drop.position.y < 30) {
+                    for (const node of nestNodes) {
+                        if (node.userData.isChamber) {
+                            const distXZ = new THREE.Vector2(drop.position.x - node.position.x, drop.position.z - node.position.z).length();
+                            if (distXZ < node.geometry.parameters.radius) {
+                                const waterPos = new THREE.Vector3(drop.position.x, node.position.y, drop.position.z);
+                                createFinding(waterPos, 'WATER_DROP');
+                                break; 
+                            }
+                        }
+                    }
+                    scene.remove(drop); gameState.rainParticles.splice(i, 1);
+                }
+            }
+        }
+
+        function growRoots() {
+            gameState.rootsData.forEach(rootData => {
+                rootData.seasonAge++;
+                const lastPoint = rootData.points[rootData.points.length - 1];
+                
+                if (rootData.points.length > 15 || lastPoint.y < -10) return;
+
+                const newPoint = lastPoint.clone();
+                newPoint.y -= 0.5 + (Math.random() - 0.5) * 0.2;
+                newPoint.x += (Math.random() - 0.5) * 0.5;
+                newPoint.z += (Math.random() - 0.5) * 0.5;
+                rootData.points.push(newPoint);
+
+                const newCurve = new THREE.CatmullRomCurve3(rootData.points);
+                const newGeo = new THREE.TubeGeometry(newCurve, Math.max(20, rootData.points.length * 3), rootData.radius, 8, false);
+                deformGeometry(newGeo, 0.05);
+
+                rootData.mesh.geometry.dispose(); 
+                rootData.mesh.geometry = newGeo;
+            });
+        }
+        
+        function layEgg() {
+            const nursery = gameState.storageChambers.NURSERY;
+            if (!nursery || !nursery.userData.larvaSlots) return;
+            const freeSlot = nursery.userData.larvaSlots.find(s => !s.occupied);
+            if (!freeSlot) return;
+            const geo = new THREE.SphereGeometry(0.05, 8, 8);
+            const mesh = new THREE.Mesh(geo, MATERIALS.larva);
+            mesh.position.copy(freeSlot.position);
+            scene.add(mesh);
+            const larva = { mesh, feedCount: 0, state: 'hungry', slot: freeSlot };
+            gameState.larvae.push(larva);
+            freeSlot.occupied = true; freeSlot.larva = larva;
+        }
+        
+        function createFinding(position, typeKey = null) {
+            const keys = Object.keys(FINDING_TYPES);
+            const randomTypeKey = typeKey || keys[Math.floor(Math.random() * keys.length)];
+            const typeInfo = FINDING_TYPES[randomTypeKey];
+
+            let findingMesh;
+
+            if (typeInfo.model) {
+                if (randomTypeKey === 'SUNFLOWER_SEED' && gameState.seedModelTemplate) {
+                    findingMesh = SkeletonUtils.clone(gameState.seedModelTemplate);
+                    findingMesh.scale.set(0.007, 0.007, 0.007);
+                    findingMesh.rotation.x = -Math.PI / 2;
+                    findingMesh.rotation.z = Math.random() * Math.PI * 2;
+                } else {
+                    return;
+                }
+            } else {
+                findingMesh = new THREE.Mesh(typeInfo.geo.clone(), typeInfo.material);
+            }
+            
+            findingMesh.userData.findingType = randomTypeKey;
+            if (randomTypeKey === 'GRASS_BLADE') findingMesh.position.y += 0.4;
+            findingMesh.castShadow = true;
+            findingMesh.position.copy(position);
+            const finding = { mesh: findingMesh, state: 'uncollected', value: typeInfo.value, storageType: typeInfo.storageType };
+            
+            if (typeInfo.requiredAnts) {
+                finding.requiredAnts = typeInfo.requiredAnts;
+                finding.collectingAnts = [];
+            }
+            
+            gameState.findings.push(finding);
+            scene.add(findingMesh);
+        }
+
+        function spawnDebris(chamber) {
+            const particleCount = Math.floor(Math.pow(chamber.geometry.parameters.radius, 2) * 4);
+            for (let i = 0; i < particleCount; i++) {
+                const randomPos = new THREE.Vector3((Math.random() - 0.5) * chamber.geometry.parameters.radius * 1.5, (Math.random() - 0.5) * chamber.geometry.parameters.radius * 1.5, (Math.random() - 0.5) * chamber.geometry.parameters.radius * 1.5);
+                createFinding(chamber.position.clone().add(randomPos), 'DEBRIS');
+            }
+        }
+        
+        function spawnDiggingEffect(position, count) {
+            for (let i = 0; i < count; i++) {
+                const geo = new THREE.SphereGeometry(0.05, 4, 4);
+                const particleMesh = new THREE.Mesh(geo, MATERIALS.diggingParticle.clone());
+                particleMesh.position.copy(position).add(new THREE.Vector3(0, 0.1, 0));
+                const velocity = new THREE.Vector3((Math.random() - 0.5) * 1.5, Math.random() * 1.5, (Math.random() - 0.5) * 1.5);
+                const particle = { mesh: particleMesh, velocity: velocity, lifespan: Math.random() * 1 + 0.5 };
+                gameState.diggingParticles.push(particle); scene.add(particleMesh);
+            }
+        }
+
+        function setAntGlow(ant, glowOn) {
+            ant.mesh.traverse(child => { if (child.isSkinnedMesh) child.material.emissiveIntensity = glowOn ? 4.0 : 1.5; });
+        }
+        
+        function getRandomInternalNode() {
+             const internalNodes = nestNodes.filter(n => !n.userData.isExit && n.userData.isChamber);
+             return internalNodes[Math.floor(Math.random() * internalNodes.length)] || nestNodes[0];
+        }
+
+        function smoothLookAt(object, targetPosition, alpha) {
+            const targetQuaternion = new THREE.Quaternion();
+            const tempMatrix = new THREE.Matrix4();
+            tempMatrix.lookAt(object.position, targetPosition, object.up);
+            targetQuaternion.setFromRotationMatrix(tempMatrix);
+            object.quaternion.slerp(targetQuaternion, alpha);
+        }
+
+        function toggleXrayMode() {
+            gameState.isXrayMode = !gameState.isXrayMode;
+
+            const setMaterial = (object, material) => {
+                if (!gameState.originalMaterials.has(object.uuid)) {
+                    gameState.originalMaterials.set(object.uuid, object.material);
+                }
+                object.material = material;
+            };
+
+            const restoreMaterial = (object) => {
+                if (gameState.originalMaterials.has(object.uuid)) {
+                    object.material = gameState.originalMaterials.get(object.uuid);
+                }
+            };
+            
+            gameState.ants.forEach(ant => {
+                if (ant.mesh.position.y < 30) {
+                    ant.mesh.traverse(child => {
+                        if (child.isSkinnedMesh) {
+                            if (gameState.isXrayMode) {
+                                let mat;
+                                if (ant.isQueen) mat = cyberMaterials.queen;
+                                else if (ant.type === 'soldier') mat = cyberMaterials.soldier;
+                                else mat = cyberMaterials.worker;
+                                setMaterial(child, mat);
+                            } else {
+                                restoreMaterial(child);
+                            }
+                        }
+                    });
+                }
+            });
+
+            gameState.larvae.forEach(larva => {
+                if (gameState.isXrayMode) setMaterial(larva.mesh, cyberMaterials.larva);
+                else restoreMaterial(larva.mesh);
+            });
+            
+            gameState.findings.forEach(finding => {
+                if (finding.mesh.position.y < 30) {
+                    if (gameState.isXrayMode) setMaterial(finding.mesh, cyberMaterials.finding);
+                    else restoreMaterial(finding.mesh);
+                }
+            });
+
+            nest.traverse(child => {
+                if (child.isMesh) {
+                    if (gameState.isXrayMode) setMaterial(child, cyberMaterials.chamber);
+                    else restoreMaterial(child);
+                }
+            });
+            
+            gameState.rootsData.forEach(rootData => {
+                 if (gameState.isXrayMode) setMaterial(rootData.mesh, cyberMaterials.root);
+                 else restoreMaterial(rootData.mesh);
+            });
+        }
+
+        function displayRootAge(rootData, intersectPoint) {
+            if (!gameState.ageSprite) {
+                gameState.ageSprite = createTextSprite("", new THREE.Vector3());
+                gameState.ageSprite.visible = false;
+                scene.add(gameState.ageSprite);
+            }
+            
+            const text = `גיל: ${rootData.seasonAge} עונות`;
+            const canvas = gameState.ageSprite.material.map.image;
+            const context = canvas.getContext('2d');
+            const fontSize = 48;
+            context.font = `bold ${fontSize}px Heebo, sans-serif`;
+            const textWidth = context.measureText(text).width;
+            canvas.width = textWidth;
+            context.clearRect(0, 0, canvas.width, canvas.height);
+            context.font = `bold ${fontSize}px Heebo, sans-serif`;
+            context.fillStyle = "rgba(255, 255, 255, 0.95)";
+            context.textAlign = 'center';
+            context.textBaseline = 'middle';
+            context.fillText(text, canvas.width / 2, canvas.height / 2);
+            gameState.ageSprite.material.map.needsUpdate = true;
+            gameState.ageSprite.scale.set(textWidth / 100, (fontSize * 1.2) / 100, 1.0);
+
+            gameState.ageSprite.position.copy(intersectPoint).add(new THREE.Vector3(0, 0.5, 0));
+            gameState.ageSprite.visible = true;
+
+            setTimeout(() => {
+                if (gameState.ageSprite) gameState.ageSprite.visible = false;
+            }, 3000);
+        }
+
+        function updateFpvCamera(time) {
+            const antPosition = new THREE.Vector3();
+            gameState.selectedAnt.mesh.getWorldPosition(antPosition);
+            
+            const cameraOffset = new THREE.Vector3(0, 0.5, -0.7).applyQuaternion(gameState.selectedAnt.mesh.quaternion);
+            const lookAtPoint = new THREE.Vector3(0, 0.2, 1).applyQuaternion(gameState.selectedAnt.mesh.quaternion).add(antPosition);
+
+            if (!gameState.selectedAnt.lastRotationY) gameState.selectedAnt.lastRotationY = gameState.selectedAnt.mesh.rotation.y;
+            let deltaY = gameState.selectedAnt.mesh.rotation.y - gameState.selectedAnt.lastRotationY;
+            if (deltaY > Math.PI) deltaY -= 2 * Math.PI;
+            if (deltaY < -Math.PI) deltaY += 2 * Math.PI;
+            gameState.selectedAnt.lastRotationY = gameState.selectedAnt.mesh.rotation.y;
+
+            if (gameState.fpvCamera.currentRoll === undefined) gameState.fpvCamera.currentRoll = 0;
+            const targetRoll = -deltaY * 3.0;
+            gameState.fpvCamera.currentRoll = THREE.MathUtils.lerp(gameState.fpvCamera.currentRoll, targetRoll, 0.1);
+
+            const cameraForwardDirection = new THREE.Vector3().subVectors(lookAtPoint, antPosition).normalize();
+            const defaultUp = new THREE.Vector3(0, 1, 0);
+            const tiltedUp = defaultUp.clone().applyAxisAngle(cameraForwardDirection, gameState.fpvCamera.currentRoll);
+
+            gameState.fpvCamera.up.copy(tiltedUp);
+            gameState.fpvCamera.position.copy(antPosition).add(cameraOffset);
+            gameState.fpvCamera.lookAt(lookAtPoint);
+            
+            if (gameState.selectedAnt && UI.thoughtBox) {
+                const thought = antThoughts[gameState.selectedAnt.state];
+                if (thought) {
+                    UI.thoughtBox.innerHTML = `<strong>מצב:</strong> ${thought.current}<br><strong>הלאה:</strong> ${thought.next}`;
+                } else {
+                    UI.thoughtBox.textContent = `מצב: ${gameState.selectedAnt.state}`;
+                }
+            }
+            
+            gameState.fpvRenderer.render(scene, gameState.fpvCamera);
+        }
+
+        function updateSelectedAntBlink(time) {
+            if (gameState.previouslySelectedAnt && gameState.previouslySelectedAnt !== gameState.selectedAnt) {
+                gameState.previouslySelectedAnt.mesh.traverse(child => {
+                    if (child.isSkinnedMesh) {
+                        const mat = child.material;
+                        if (mat.userData.originalEmissiveIntensity !== undefined) {
+                            mat.emissiveIntensity = mat.userData.originalEmissiveIntensity;
+                        }
+                    }
+                });
+            }
+            
+            if (gameState.selectedAnt) {
+                if (gameState.previouslySelectedAnt !== gameState.selectedAnt) {
+                    gameState.selectedAnt.mesh.traverse(child => {
+                        if (child.isSkinnedMesh) {
+                            child.material.userData.originalEmissiveIntensity = child.material.emissiveIntensity;
+                        }
+                    });
+                }
+                gameState.selectedAnt.mesh.traverse(child => {
+                    if (child.isSkinnedMesh) {
+                        const mat = child.material;
+                        const baseIntensity = mat.userData.originalEmissiveIntensity || 1.5;
+                        mat.emissiveIntensity = baseIntensity + Math.sin(time * 15) * (baseIntensity * 0.8);
+                    }
+                });
+                gameState.previouslySelectedAnt = gameState.selectedAnt;
+            } else {
+                gameState.previouslySelectedAnt = null;
+            }
+        }
+        
+        function isPositionOccupied(newPos, newRadius) {
+            for (const node of nestNodes) { if (node.userData.isChamber) { const dist = newPos.distanceTo(node.position); if (dist < node.geometry.parameters.radius + newRadius + CONFIG.CHAMBER_SPACING) return true; } }
+            for (const pos of gameState.dugChamberPositions) { const dist = newPos.distanceTo(pos); if (dist < newRadius + CONFIG.CHAMBER_SPACING) return true; }
+            return false;
+        }
+
+        function findValidPlacementForChamber(newChamberRadius, length = null) {
+            for (let i = 0; i < 50; i++) {
+                const validParents = nestNodes.filter(n => n.userData.isChamber || n.userData.isCorridorEnd);
+                if (validParents.length === 0) return {};
+                
+                let parentNode;
+                // העדפה לבנייה מחדרים שאינם חדר המלכה כדי לעודד התרחבות
+                if (Math.random() < 0.8 && validParents.length > 1) { // 80% סיכוי לבחור חדר שאינו של המלכה
+                    const nonQueenParents = validParents.filter(p => p !== gameState.storageChambers.QUEEN);
+                    if (nonQueenParents.length > 0) {
+                        parentNode = nonQueenParents[Math.floor(Math.random() * nonQueenParents.length)];
+                    } else {
+                        parentNode = validParents[0]; // גיבוי למקרה שנשאר רק חדר המלכה
+                    }
+                } else { // 20% סיכוי לבחור כל חדר, כולל של המלכה, או אם זו האפשרות היחידה
+                    parentNode = validParents[Math.floor(Math.random() * validParents.length)];
+                }
+
+                if(!parentNode) continue;
+                const randomDirection = new THREE.Vector3().randomDirection(); let parentRadius = parentNode.geometry ? parentNode.geometry.parameters.radius : 0.5;
+                const distanceToNewChamber = parentRadius + newChamberRadius + (length || 3);
+                const finalChamberPos = parentNode.position.clone().add(randomDirection.clone().multiplyScalar(distanceToNewChamber));
+                if (finalChamberPos.y + newChamberRadius > 30) continue;
+                if (!isPositionOccupied(finalChamberPos, newChamberRadius)) {
+                    finalChamberPos.radius = newChamberRadius;
+                    const site = parentNode.position.clone().add(randomDirection.clone().multiplyScalar(parentRadius * 0.85));
+                    return { parentNode, site, finalPos: finalChamberPos };
+                }
+            }
+            return {};
+        }
+
+        function createCurvedTunnel(startPoint, endPoint, radius) {
+            const group = new THREE.Group(); const curve = new THREE.CatmullRomCurve3([ startPoint, new THREE.Vector3().lerpVectors(startPoint, endPoint, 0.3).add(new THREE.Vector3(Math.random()-0.5, Math.random()-0.5, Math.random()-0.5).multiplyScalar(3)), new THREE.Vector3().lerpVectors(startPoint, endPoint, 0.7).add(new THREE.Vector3(Math.random()-0.5, Math.random()-0.5, Math.random()-0.5).multiplyScalar(3)), endPoint ]);
+            const tubeGeo = new THREE.TubeGeometry(curve, 20, radius, 8, false); deformGeometry(tubeGeo, 0.1);
+            const tubeMesh = new THREE.Mesh(tubeGeo, MATERIALS.chamber); group.add(tubeMesh);
+            const pathNodes = []; const numPoints = 8; const points = curve.getPoints(numPoints);
+            for (let i = 1; i < numPoints; i++) { const pointNode = new THREE.Object3D(); pointNode.position.copy(points[i]); pointNode.userData = { neighbors: [] }; if (i === numPoints -1) pointNode.userData.isCorridorEnd = true; pathNodes.push(pointNode); }
+            group.userData.pathNodes = pathNodes; group.userData.curve = curve;
+            return group;
+        }
+
+        function activateRandomAntCamera() {
+            const availableAnts = gameState.ants.filter(ant => !ant.isQueen);
+            if (availableAnts.length === 0) return;
+
+            const randomIndex = Math.floor(Math.random() * availableAnts.length);
+            gameState.selectedAnt = availableAnts[randomIndex];
+            
+            gameState.isRandomCameraMode = true;
+            UI.antCameraContainer.style.display = 'flex';
+            UI.thoughtBox.style.display = 'none';
+        }
+
+        // Initialize the game
+        window.addEventListener('DOMContentLoaded', init);
+
+    </script>
+</body>
+</html>
+
